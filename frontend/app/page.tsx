@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Slot, Generation } from "@/types";
 import { SlotEditor } from "@/components/slot-editor/SlotEditor";
 import { AudioPlayer } from "@/components/audio-player/AudioPlayer";
@@ -9,6 +9,85 @@ import { PRESET_CONDITIONS } from "@/lib/conditions";
 import toast, { Toaster } from "react-hot-toast";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { BorderBeam } from "@/components/ui/border-beam";
+
+/** Parse compiled script into colored segments for display */
+const CONDITION_COLORS: Record<string, string> = {
+  amber:   "bg-amber-500/20 text-amber-200 border-l-2 border-amber-400",
+  blue:    "bg-blue-500/20 text-blue-200 border-l-2 border-blue-400",
+  purple:  "bg-purple-500/20 text-purple-200 border-l-2 border-purple-400",
+  green:   "bg-green-500/20 text-green-200 border-l-2 border-green-400",
+  yellow:  "bg-yellow-500/20 text-yellow-200 border-l-2 border-yellow-400",
+  indigo:  "bg-indigo-500/20 text-indigo-200 border-l-2 border-indigo-400",
+  red:     "bg-red-500/20 text-red-200 border-l-2 border-red-400",
+  teal:    "bg-teal-500/20 text-teal-200 border-l-2 border-teal-400",
+  orange:  "bg-orange-500/20 text-orange-200 border-l-2 border-orange-400",
+  pink:    "bg-pink-500/20 text-pink-200 border-l-2 border-pink-400",
+  brown:   "bg-amber-700/20 text-amber-300 border-l-2 border-amber-600",
+  gray:    "bg-gray-500/20 text-gray-200 border-l-2 border-gray-400",
+};
+
+function getColorForCondition(condition: string): string {
+  const preset = PRESET_CONDITIONS.find((p) => p.value === condition);
+  return CONDITION_COLORS[preset?.color ?? ""] ?? "";
+}
+
+function ScriptPreview({ script }: { script: string }) {
+  const segments = useMemo(() => {
+    if (!script) return [];
+    const regex = /\[([^\]]+)\]\s*/g;
+    const parts: { text: string; condition: string | null }[] = [];
+    let lastIndex = 0;
+    let currentCondition: string | null = null;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(script)) !== null) {
+      const before = script.slice(lastIndex, match.index);
+      if (before.trim()) {
+        parts.push({ text: before.trim(), condition: currentCondition });
+      }
+      currentCondition = match[1].toLowerCase().trim();
+      lastIndex = match.index + match[0].length;
+    }
+
+    const remaining = script.slice(lastIndex);
+    if (remaining.trim()) {
+      parts.push({ text: remaining.trim(), condition: currentCondition });
+    }
+
+    return parts;
+  }, [script]);
+
+  if (!script) {
+    return (
+      <div className="w-full h-32 p-3 font-mono text-xs leading-relaxed bg-black/20 border border-border rounded-lg text-muted-foreground overflow-y-auto">
+        Your compiled script will appear here...
+      </div>
+    );
+  }
+
+  return (
+    <div
+      data-testid="compiled-preview"
+      className="w-full h-32 p-3 font-mono text-xs leading-relaxed bg-black/20 border border-border rounded-lg overflow-y-auto whitespace-pre-wrap break-words"
+      style={{ fontFamily: "var(--font-mono)" }}
+    >
+      {segments.map((seg, i) => {
+        if (seg.condition) {
+          return (
+            <span
+              key={i}
+              className={`inline-block my-0.5 pl-1 pr-1.5 py-0.5 rounded-sm ${getColorForCondition(seg.condition)}`}
+              title={seg.condition}
+            >
+              <span className="font-bold opacity-80">[{seg.condition}]</span> {seg.text}
+            </span>
+          );
+        }
+        return <span key={i} className="mr-1">{seg.text}</span>;
+      })}
+    </div>
+  );
+}
 
 export default function Home() {
   const [text, setText] = useState("");
@@ -134,14 +213,7 @@ export default function Home() {
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
                 Compiled Preview
               </h3>
-              <textarea
-                data-testid="compiled-preview"
-                readOnly
-                value={compiledScript}
-                placeholder="Your compiled script will appear here..."
-                className="w-full h-32 p-3 font-mono text-xs leading-relaxed bg-black/20 border border-border rounded-lg text-muted-foreground resize-none focus:outline-none"
-                style={{ fontFamily: "var(--font-mono)" }}
-              />
+              <ScriptPreview script={compiledScript} />
             </div>
           </aside>
         </div>

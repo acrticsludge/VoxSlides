@@ -16,6 +16,41 @@ interface SlotEditorProps {
   onCompiledChange: (compiled: string) => void;
 }
 
+/** Extract [tag] patterns from raw text, strip them, return clean text + auto slots */
+function processTags(rawText: string): { cleanText: string; autoSlots: Omit<Slot, "id">[] } {
+  const tagRegex = /\[([^\]]+)\]/g;
+  const tags: { raw: string; condition: string; index: number }[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = tagRegex.exec(rawText)) !== null) {
+    tags.push({
+      raw: match[0],
+      condition: match[1].toLowerCase().trim(),
+      index: match.index,
+    });
+  }
+
+  if (tags.length === 0) return { cleanText: rawText, autoSlots: [] };
+
+  // Build clean text by removing tags, and calculate adjusted positions
+  let cleanText = rawText;
+  const autoSlots: Omit<Slot, "id">[] = [];
+  let removedChars = 0;
+
+  for (const tag of tags) {
+    const adjustedPos = tag.index - removedChars;
+    autoSlots.push({
+      position: adjustedPos,
+      condition: tag.condition,
+      isCustom: !PRESET_CONDITIONS.some((p) => p.value === tag.condition),
+    });
+    cleanText = cleanText.slice(0, adjustedPos) + cleanText.slice(adjustedPos + tag.raw.length);
+    removedChars += tag.raw.length;
+  }
+
+  return { cleanText, autoSlots };
+}
+
 export function SlotEditor({
   text,
   slots,
@@ -26,6 +61,8 @@ export function SlotEditor({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [cursorPos, setCursorPos] = useState(0);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Track auto-generated slot ids so we can differentiate from manual
+  const autoSlotIdsRef = useRef<Set<string>>(new Set());
 
   const syncCursor = useCallback(() => {
     if (textareaRef.current) {
@@ -35,17 +72,56 @@ export function SlotEditor({
 
   const handleTextChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const newText = e.target.value;
-      onTextChange(newText);
-      const compiled = compileScript(newText, slots);
-      onCompiledChange(compiled);
+      const rawText = e.target.value;
+      const selStart = e.target.selectionStart;
+
+      // Process [tag] patterns in the raw input
+      const { cleanText, autoSlots } = processTags(rawText);
+
+      // Calculate cursor position: how many chars were removed BEFORE the cursor
+      let removedBeforeCursor = 0;
+      const tagRegex = /\[([^\]]+)\]/g;
+      let m: RegExpExecArray | null;
+      while ((m = tagRegex.exec(rawText)) !== null) {
+        if (m.index < selStart) {
+          removedBeforeCursor += m[0].length;
+        }
+      }
+
+      const newCursorPos = selStart - removedBeforeCursor;
+
+      if (autoSlots.length > 0) {
+        // Replace all slots with auto-detected ones
+        const newSlots = autoSlots.map((s) => {
+          const id = crypto.randomUUID();
+          return { ...s, id };
+        });
+        autoSlotIdsRef.current = new Set(newSlots.map((s) => s.id));
+
+        onTextChange(cleanText);
+        onSlotsChange(newSlots);
+        const compiled = compileScript(cleanText, newSlots);
+        onCompiledChange(compiled);
+
+        // Restore cursor position
+        requestAnimationFrame(() => {
+          if (textareaRef.current) {
+            textareaRef.current.focus();
+            const restorePos = Math.min(newCursorPos, cleanText.length);
+            textareaRef.current.setSelectionRange(restorePos, restorePos);
+          }
+        });
+      } else {
+        onTextChange(cleanText);
+        const compiled = compileScript(cleanText, slots);
+        onCompiledChange(compiled);
+      }
     },
-    [slots, onTextChange, onCompiledChange]
+    [slots, onTextChange, onSlotsChange, onCompiledChange]
   );
 
   const addSlot = useCallback(
     (condition: string, isCustom: boolean) => {
-      // Place the slot at cursor position in the text
       const newText = text.slice(0, cursorPos) + " " + text.slice(cursorPos);
       onTextChange(newText);
 
@@ -61,7 +137,6 @@ export function SlotEditor({
       onCompiledChange(compiled);
       setPickerOpen(false);
 
-      // Focus textarea after the inserted space
       requestAnimationFrame(() => {
         if (textareaRef.current) {
           textareaRef.current.focus();
@@ -94,7 +169,7 @@ export function SlotEditor({
         onKeyUp={syncCursor}
         onClick={syncCursor}
         onMouseUp={syncCursor}
-        placeholder="Type your script here..."
+        placeholder="Type your script here... (or use [excited] [whisper] tags directly)"
         className={`
           w-full h-64 p-3 font-mono text-sm leading-relaxed
           bg-transparent border border-border rounded-lg
@@ -105,7 +180,7 @@ export function SlotEditor({
         style={{ fontFamily: "var(--font-mono)" }}
       />
 
-      {/* Active conditions bar — shows all currently added conditions */}
+      {/* Active conditions bar */}
       {slots.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-muted-foreground font-medium">Active:</span>
