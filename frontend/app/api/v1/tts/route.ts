@@ -1,28 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
-import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
+import { DeepgramClient } from "@deepgram/sdk";
 import { z } from "zod";
 
 const RequestSchema = z.object({
   script: z.string().min(1, "Script is required").max(5000, "Script too long"),
 });
 
-// Dramatic prosody mapping — extreme values for clearly noticeable emotion changes
-const CONDITION_PROSODY: Record<string, { rate: number; pitch: string; volume: number }> = {
-  excited:         { rate: 1.8, pitch: "+300Hz", volume: 100 },
-  whisper:         { rate: 0.35, pitch: "-200Hz", volume: 10 },
-  "slow and dramatic": { rate: 0.2, pitch: "-150Hz", volume: 100 },
-  fast:            { rate: 2.5, pitch: "+150Hz", volume: 100 },
-  nervous:         { rate: 1.5, pitch: "+300Hz", volume: 80 },
-  crying:          { rate: 0.35, pitch: "-300Hz", volume: 60 },
-  angry:           { rate: 1.6, pitch: "-200Hz", volume: 100 },
-  calm:            { rate: 0.5, pitch: "-80Hz", volume: 70 },
-  laughing:        { rate: 1.4, pitch: "+300Hz", volume: 100 },
-  sarcastic:       { rate: 0.7, pitch: "+350Hz", volume: 95 },
-  storytelling:    { rate: 0.7, pitch: "+0Hz", volume: 100 },
-  breathless:      { rate: 1.8, pitch: "+200Hz", volume: 70 },
+// Text-level emotional cues added per condition (no SSML/pitch/rate hacks)
+const EMOTION_CUES: Record<string, { prefix: string; suffix: string; casing: "normal" | "upper" }> = {
+  excited:         { prefix: "",                      suffix: "!",  casing: "normal" },
+  whisper:         { prefix: "... ",                  suffix: "...", casing: "normal" },
+  "slow and dramatic": { prefix: "",                  suffix: "...", casing: "normal" },
+  fast:            { prefix: "",                      suffix: "!",  casing: "normal" },
+  nervous:         { prefix: "uh, ",                  suffix: "...", casing: "normal" },
+  crying:          { prefix: "",                      suffix: "...", casing: "normal" },
+  angry:           { prefix: "",                      suffix: "!",  casing: "upper" },
+  calm:            { prefix: "... ",                  suffix: "...", casing: "normal" },
+  laughing:        { prefix: "",                      suffix: " ha ha", casing: "normal" },
+  sarcastic:       { prefix: "oh, really? ",          suffix: "",   casing: "normal" },
+  storytelling:    { prefix: "",                      suffix: "",   casing: "normal" },
+  breathless:      { prefix: "",                      suffix: "...", casing: "normal" },
 };
-
-const DEFAULT = { rate: 1.0, pitch: "+0Hz", volume: 100 };
 
 interface Segment {
   text: string;
@@ -53,20 +51,6 @@ function parseScript(script: string): Segment[] {
   return segments;
 }
 
-function escapeXml(text: string): string {
-  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
-}
-
-/** Build SSML for a batch of segments (max 2 per batch — Edge API reliable limit) */
-function buildBatchSSML(batch: Segment[], voiceName: string, voiceLang: string): string {
-  let body = "";
-  for (const seg of batch) {
-    const p = CONDITION_PROSODY[seg.condition ?? ""] ?? DEFAULT;
-    body += `<prosody rate="${p.rate}" pitch="${p.pitch}" volume="${p.volume}">${escapeXml(seg.text)}</prosody>`;
-  }
-  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="${voiceLang}"><voice name="${voiceName}">${body}</voice></speak>`;
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -86,35 +70,55 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
     }
 
-    // Batch segments into groups of 2 (Edge API handles 2 prosody elements reliably)
-    const voiceName = "en-US-AvaNeural";
-    const voiceLang = "en-US";
-    const batchSize = 2;
-    const audioChunks: Buffer[] = [];
+    // Build naturally expressive text from segments using text-level cues only
+    let fullText = "";
+    for (const seg of segments) {
+      let text = seg.text.trim();
+      if (!text) continue;
 
-    for (let i = 0; i < segments.length; i += batchSize) {
-      const batch = segments.slice(i, i + batchSize);
-      const ssml = buildBatchSSML(batch, voiceName, voiceLang);
-
-      const tts = new MsEdgeTTS();
-      await tts.setMetadata(voiceName, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
-      const { audioStream } = await tts.rawToStream(ssml);
-
-      const chunks: Buffer[] = [];
-      await new Promise<void>((resolve, reject) => {
-        audioStream.on("data", (d: Buffer) => chunks.push(d));
-        audioStream.on("close", () => resolve());
-        audioStream.on("error", (e: Error) => reject(e));
-      });
-
-      audioChunks.push(Buffer.concat(chunks));
+      const cues = EMOTION_CUES[seg.condition ?? ""];
+      if (cues) {
+        if (cues.casing === "upper") text = text.toUpperCase();
+        if (cues.prefix) text = cues.prefix + text;
+        if (cues.suffix && !text.endsWith(cues.suffix)) text = text + cues.suffix;
+      }
+      fullText += text + " ";
     }
 
-    if (audioChunks.length === 0) {
+    fullText = fullText.trim();
+    if (!fullText) {
+      return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
+    }
+
+    const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
+    if (!deepgramApiKey) {
+      return NextResponse.json({ error: "DEEPGRAM_API_KEY not configured" }, { status: 500 });
+    }
+
+    const deepgram = new DeepgramClient({ apiKey: deepgramApiKey });
+    const result = await deepgram.speak.v1.audio.generate({
+      text: fullText,
+      model: "aura-2-thalia-en",
+    });
+
+    const audioStream = result.stream();
+    if (!audioStream) {
+      return NextResponse.json({ error: "No audio stream returned" }, { status: 422 });
+    }
+
+    const reader = audioStream.getReader();
+    const chunks: Uint8Array[] = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    if (chunks.length === 0) {
       return NextResponse.json({ error: "No audio generated" }, { status: 422 });
     }
 
-    const fullAudio = Buffer.concat(audioChunks);
+    const fullAudio = Buffer.concat(chunks.map((c) => Buffer.from(c)));
 
     return new NextResponse(fullAudio, {
       status: 200,
