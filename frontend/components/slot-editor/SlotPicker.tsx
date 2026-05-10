@@ -44,7 +44,7 @@ export function SlotPicker({ onSelect, open, onOpenChange, children }: SlotPicke
           )
         }
       />
-      <PopoverContent className="w-72 p-3" align="start">
+      <PopoverContent className="w-72 p-3 backdrop-blur-xl bg-background/80" align="start">
         <div className="space-y-3">
           <div>
             <p className="text-sm font-medium mb-2 text-muted-foreground">
