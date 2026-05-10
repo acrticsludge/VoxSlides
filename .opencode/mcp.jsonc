@@ -84,7 +84,7 @@
     "playwright": {
       "type": "local",
       "command": ["npx", "-y", "@playwright/mcp@latest"],
-      "enabled": true 
+      "enabled": false
     },
 
     // ── Claude-Mem ────────────────────────────────────────────────────────────
