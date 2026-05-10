@@ -51,14 +51,13 @@ function parseScript(script: string): Segment[] {
   return segments;
 }
 
-/** Call Gemini to rewrite a sentence with emotional expression */
+/** Call Gemini to add subtle emotional flavor to a sentence */
 async function expressWithGemini(
   text: string,
   emotion: string,
   apiKey: string
 ): Promise<string | null> {
-  const prompt = `Rewrite this sentence to sound genuinely ${emotion} in a natural speaking voice. Make it sound like a real person expressing ${emotion}, not like a robot.
-Return ONLY the rewritten sentence, nothing else. No quotation marks, no labels.
+  const prompt = `Add subtle ${emotion} tone to this sentence. Keep it short — add at most a few words. Do not change the meaning. Do not repeat words. Do not add new topics. Return ONLY the enhanced sentence.
 
 Sentence: "${text}"`;
 
@@ -71,8 +70,8 @@ Sentence: "${text}"`;
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.8,
-            maxOutputTokens: 150,
+            temperature: 0.5,
+            maxOutputTokens: 80,
           },
         }),
       }
@@ -82,7 +81,8 @@ Sentence: "${text}"`;
 
     const data = await res.json();
     const rewritten = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    return rewritten && rewritten.length > 0 ? rewritten : null;
+    if (!rewritten || rewritten.length > text.length * 2) return null;
+    return rewritten;
   } catch {
     return null;
   }
