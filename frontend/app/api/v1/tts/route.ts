@@ -6,20 +6,21 @@ const RequestSchema = z.object({
   script: z.string().min(1, "Script is required").max(5000, "Script too long"),
 });
 
-// Text-level emotional cues added per condition (no SSML/pitch/rate hacks)
+// Text-level emotional cues — each condition has a UNIQUE speaking pattern
+// so Deepgram's neural voice reads them with naturally different delivery
 const EMOTION_CUES: Record<string, { prefix: string; suffix: string; casing: "normal" | "upper" }> = {
-  excited:         { prefix: "",                      suffix: "!",  casing: "normal" },
-  whisper:         { prefix: "... ",                  suffix: "...", casing: "normal" },
-  "slow and dramatic": { prefix: "",                  suffix: "...", casing: "normal" },
-  fast:            { prefix: "",                      suffix: "!",  casing: "normal" },
-  nervous:         { prefix: "uh, ",                  suffix: "...", casing: "normal" },
-  crying:          { prefix: "",                      suffix: "...", casing: "normal" },
-  angry:           { prefix: "",                      suffix: "!",  casing: "upper" },
-  calm:            { prefix: "... ",                  suffix: "...", casing: "normal" },
-  laughing:        { prefix: "",                      suffix: " ha ha", casing: "normal" },
-  sarcastic:       { prefix: "oh, really? ",          suffix: "",   casing: "normal" },
-  storytelling:    { prefix: "",                      suffix: "",   casing: "normal" },
-  breathless:      { prefix: "",                      suffix: "...", casing: "normal" },
+  excited:         { prefix: "Wow! ",                 suffix: "! Incredible!", casing: "normal" },
+  whisper:         { prefix: "... pssst... ",          suffix: "... shhh...",   casing: "normal" },
+  "slow and dramatic": { prefix: "... ... ... ",       suffix: "... ...",       casing: "normal" },
+  fast:            { prefix: "",                      suffix: "! Right now!",  casing: "normal" },
+  nervous:         { prefix: "Uhh... well... ",        suffix: "... I think...", casing: "normal" },
+  crying:          { prefix: "sniff... ",              suffix: "... sob...",    casing: "normal" },
+  angry:           { prefix: "Grrr! ",                suffix: "! Enough!",     casing: "upper" },
+  calm:            { prefix: "Ahh... ",                suffix: "... mmh...",    casing: "normal" },
+  laughing:        { prefix: "Ha ha! ",               suffix: "... hee hee!",  casing: "normal" },
+  sarcastic:       { prefix: "Ohhh... really? ",      suffix: "... sure.",     casing: "normal" },
+  storytelling:    { prefix: "Once upon a time... ",   suffix: "...",           casing: "normal" },
+  breathless:      { prefix: "*gasp*... ",            suffix: "... *huff*...", casing: "normal" },
 };
 
 interface Segment {
