@@ -8,7 +8,6 @@ export interface Slot {
 export interface Generation {
   id: string;
   script: string;
-  audioUrl: string;
   timestamp: number;
   slots: Slot[];
 }

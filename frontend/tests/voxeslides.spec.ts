@@ -4,7 +4,7 @@ test.describe("VoxSlides", () => {
   test("page loads with editor visible", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByText("VoxSlides")).toBeVisible();
-    await expect(page.getByTestId('textarea')).toBeVisible();
+    await expect(page.getByTestId("textarea")).toBeVisible();
   });
 
   test("typing text updates compiled preview", async ({ page }) => {
@@ -33,64 +33,30 @@ test.describe("VoxSlides", () => {
   });
 
   test("generate button shows loading state", async ({ page }) => {
-    await page.route("/api/v1/tts", async (route) => {
-      await new Promise((r) => setTimeout(r, 500));
-      const wav = Buffer.alloc(44);
-      wav.write("RIFF", 0);
-      wav.write("WAVE", 8);
-      await route.fulfill({
-        status: 200,
-        contentType: "audio/wav",
-        body: wav,
-      });
-    });
-
     await page.goto("/");
     await page.getByTestId("textarea").fill("Testing generation");
     await page.locator('[data-testid="generate-btn"]').click();
     await expect(page.locator('[data-testid="generate-btn"]')).toContainText(
-      /Generating|Warming/i
+      /Generating/i
     );
   });
 
   test("audio player appears after generation", async ({ page }) => {
-    await page.route("/api/v1/tts", async (route) => {
-      const wav = Buffer.alloc(44);
-      wav.write("RIFF", 0);
-      wav.write("WAVE", 8);
-      await route.fulfill({
-        status: 200,
-        contentType: "audio/wav",
-        body: wav,
-      });
-    });
-
     await page.goto("/");
     await page.getByTestId("textarea").fill("Hello VoxSlides");
     await page.locator('[data-testid="generate-btn"]').click();
     await expect(page.locator('[data-testid="audio-player"]')).toBeVisible({
-      timeout: 10000,
+      timeout: 5000,
     });
   });
 
   test("generation saved to history", async ({ page }) => {
-    await page.route("/api/v1/tts", async (route) => {
-      const wav = Buffer.alloc(44);
-      wav.write("RIFF", 0);
-      wav.write("WAVE", 8);
-      await route.fulfill({
-        status: 200,
-        contentType: "audio/wav",
-        body: wav,
-      });
-    });
-
     await page.goto("/");
     await page.getByTestId("textarea").fill("History test");
     await page.locator('[data-testid="generate-btn"]').click();
     await page
       .locator('[data-testid="audio-player"]')
-      .waitFor({ timeout: 10000 });
+      .waitFor({ timeout: 5000 });
     await page.locator('[data-testid="history-btn"]').click();
     await expect(page.locator('[data-testid="history-item"]')).toHaveCount(1);
   });

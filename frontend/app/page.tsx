@@ -14,62 +14,38 @@ export default function Home() {
   const [text, setText] = useState("");
   const [slots, setSlots] = useState<Slot[]>([]);
   const [compiledScript, setCompiledScript] = useState("");
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [activeScript, setActiveScript] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [loadingState, setLoadingState] = useState<"idle" | "warming" | "generating">("idle");
 
-  const handleGenerate = useCallback(async () => {
+  const handleGenerate = useCallback(() => {
     if (!compiledScript.trim()) {
       toast.error("Type a script before generating.");
       return;
     }
 
     setGenerating(true);
-    setLoadingState("warming");
-    setAudioUrl(null);
+    setActiveScript(null);
 
-    try {
-      const res = await fetch("/api/v1/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ script: compiledScript }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: "Generation failed" }));
-        throw new Error(err.error || `HTTP ${res.status}`);
-      }
-
-      setLoadingState("generating");
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      setAudioUrl(url);
+    // Small delay so the shimmer animation shows
+    setTimeout(() => {
+      setActiveScript(compiledScript);
 
       const generation: Generation = {
         id: crypto.randomUUID(),
         script: compiledScript,
-        audioUrl: url,
         timestamp: Date.now(),
         slots,
       };
       addToHistory(generation);
 
-      toast.success("Generation complete — your audio is ready to play.");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
       setGenerating(false);
-      setLoadingState("idle");
-    }
+      toast.success("Speaking your script...");
+    }, 600);
   }, [compiledScript, slots]);
 
   const handleReplay = useCallback((gen: Generation) => {
-    setAudioUrl(gen.audioUrl);
+    setActiveScript(gen.script);
   }, []);
-
-  const loadingLabel =
-    loadingState === "warming" ? "Warming up model..." : "Generating...";
 
   return (
     <div className="min-h-screen bg-background">
@@ -152,12 +128,12 @@ export default function Home() {
             className="w-full h-12 text-base font-semibold"
             background="#f5a623"
           >
-            {generating ? loadingLabel : "Generate Speech"}
+            {generating ? "Generating..." : "Generate Speech"}
           </ShimmerButton>
           {generating && <BorderBeam />}
         </div>
 
-        {audioUrl && <AudioPlayer audioUrl={audioUrl} />}
+        {activeScript && <AudioPlayer text={activeScript} />}
       </main>
     </div>
   );
