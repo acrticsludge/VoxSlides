@@ -11,6 +11,7 @@ interface AudioPlayerProps {
 }
 
 function formatTime(seconds: number): string {
+  if (!isFinite(seconds) || seconds < 0) return "00:00";
   const m = Math.floor(seconds / 60);
   const s = Math.floor(seconds % 60);
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
@@ -56,6 +57,7 @@ export function AudioPlayer({ audioUrl }: AudioPlayerProps) {
     const audio = audioRef.current;
     if (!audio) return;
     const newTime = Array.isArray(value) ? value[0] : value;
+    if (!isFinite(newTime) || newTime < 0) return;
     audio.currentTime = newTime;
     setCurrentTime(newTime);
   }, []);
@@ -104,8 +106,8 @@ export function AudioPlayer({ audioUrl }: AudioPlayerProps) {
             </span>
 
             <Slider
-              value={[currentTime]}
-              max={duration || 100}
+              value={[!isFinite(currentTime) ? 0 : currentTime]}
+              max={!isFinite(duration) || duration <= 0 ? 100 : duration}
               step={0.1}
               onValueChange={handleSeek}
               className="flex-1"
