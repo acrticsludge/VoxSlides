@@ -1,9 +1,9 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("VoxeSlides", () => {
+test.describe("VoxSlides", () => {
   test("page loads with editor visible", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByText("VoxeSlides")).toBeVisible();
+    await expect(page.getByText("VoxSlides")).toBeVisible();
     await expect(page.getByTestId('textarea')).toBeVisible();
   });
 
@@ -66,7 +66,7 @@ test.describe("VoxeSlides", () => {
     });
 
     await page.goto("/");
-    await page.getByTestId("textarea").fill("Hello VoxeSlides");
+    await page.getByTestId("textarea").fill("Hello VoxSlides");
     await page.locator('[data-testid="generate-btn"]').click();
     await expect(page.locator('[data-testid="audio-player"]')).toBeVisible({
       timeout: 10000,

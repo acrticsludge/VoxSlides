@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { History, Trash2, Play } from "lucide-react";
 import type { Generation } from "@/types";
 
-const HISTORY_KEY = "voxeslides_history";
+const HISTORY_KEY = "voxslides_history";
 const MAX_HISTORY = 5;
 
 function loadHistory(): Generation[] {

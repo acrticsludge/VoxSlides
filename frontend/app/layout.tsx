@@ -17,7 +17,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VoxeSlides",
+  title: "VoxSlides",
   description: "Expressive text-to-speech with condition slots",
 };
 

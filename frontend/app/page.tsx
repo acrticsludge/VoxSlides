@@ -89,7 +89,7 @@ export default function Home() {
           className="text-xl font-extrabold tracking-tight"
           style={{ fontFamily: "var(--font-syne)" }}
         >
-          VoxeSlides
+          VoxSlides
         </h1>
         <HistorySheet onReplay={handleReplay} />
       </header>

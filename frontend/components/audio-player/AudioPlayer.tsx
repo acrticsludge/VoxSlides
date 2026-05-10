@@ -118,7 +118,7 @@ export function AudioPlayer({ audioUrl }: AudioPlayerProps) {
 
             <a
               href={audioUrl}
-              download="voxeslides-output.wav"
+              download="voxslides-output.wav"
               className="text-muted-foreground hover:text-foreground transition-colors"
             >
               <Download className="h-4 w-4" />

@@ -28,7 +28,7 @@ export function SlotChip({ slot, onRemove }: SlotChipProps) {
       data-testid="slot-chip"
       className={`
         inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium
-        border ${getColorClasses(slot)}
+        border pointer-events-auto ${getColorClasses(slot)}
       `}
     >
       {preset?.emoji}

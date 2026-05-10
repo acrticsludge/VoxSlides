@@ -103,7 +103,7 @@ export function SlotEditor({
     <div className="space-y-3">
       <div className="relative min-h-[16rem]">
         <div
-          className="absolute inset-0 font-mono text-sm leading-relaxed p-3 pointer-events-none whitespace-pre-wrap break-words text-transparent"
+          className="absolute inset-0 font-mono text-sm leading-relaxed p-3 pointer-events-none whitespace-pre-wrap break-words text-transparent z-10"
           aria-hidden="true"
         >
           {renderOverlay()}
