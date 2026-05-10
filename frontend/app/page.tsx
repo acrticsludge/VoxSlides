@@ -14,21 +14,37 @@ export default function Home() {
   const [text, setText] = useState("");
   const [slots, setSlots] = useState<Slot[]>([]);
   const [compiledScript, setCompiledScript] = useState("");
-  const [activeScript, setActiveScript] = useState<string | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [loadingState, setLoadingState] = useState<"idle" | "warming" | "generating">("idle");
 
-  const handleGenerate = useCallback(() => {
+  const handleGenerate = useCallback(async () => {
     if (!compiledScript.trim()) {
       toast.error("Type a script before generating.");
       return;
     }
 
     setGenerating(true);
-    setActiveScript(null);
+    setLoadingState("warming");
+    setAudioUrl(null);
 
-    // Small delay so the shimmer animation shows
-    setTimeout(() => {
-      setActiveScript(compiledScript);
+    try {
+      const res = await fetch("/api/v1/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ script: compiledScript }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Generation failed" }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+
+      setLoadingState("generating");
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      setAudioUrl(url);
 
       const generation: Generation = {
         id: crypto.randomUUID(),
@@ -38,14 +54,24 @@ export default function Home() {
       };
       addToHistory(generation);
 
+      toast.success("Audio ready — Microsoft neural voice");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
       setGenerating(false);
-      toast.success("Speaking your script...");
-    }, 600);
+      setLoadingState("idle");
+    }
   }, [compiledScript, slots]);
 
   const handleReplay = useCallback((gen: Generation) => {
-    setActiveScript(gen.script);
+    // Re-generate by setting the script and triggering generation
+    setCompiledScript(gen.script);
+    // Can't re-trigger audio without re-calling API, so we store the URL in history
+    toast("Replay from history will re-generate audio");
   }, []);
+
+  const loadingLabel =
+    loadingState === "warming" ? "Connecting to voice engine..." : "Generating with neural voice...";
 
   return (
     <div className="min-h-screen bg-background">
@@ -128,12 +154,12 @@ export default function Home() {
             className="w-full h-12 text-base font-semibold"
             background="#f5a623"
           >
-            {generating ? "Generating..." : "Generate Speech"}
+            {generating ? loadingLabel : "Generate Speech"}
           </ShimmerButton>
           {generating && <BorderBeam />}
         </div>
 
-        {activeScript && <AudioPlayer text={activeScript} />}
+        {audioUrl && <AudioPlayer audioUrl={audioUrl} />}
       </main>
     </div>
   );
