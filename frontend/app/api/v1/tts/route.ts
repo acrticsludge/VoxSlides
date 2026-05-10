@@ -1,33 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
+import { DeepgramClient } from "@deepgram/sdk";
 import { z } from "zod";
 
 const RequestSchema = z.object({
   script: z.string().min(1, "Script is required").max(5000, "Script too long"),
 });
 
-interface Prosody {
-  rate: number;
-  pitch: string;
-  volume: number;
-}
-
-const CONDITION_PROSODY: Record<string, Prosody> = {
-  excited:         { rate: 1.5, pitch: "+200Hz", volume: 100 },
-  whisper:         { rate: 0.6, pitch: "-150Hz", volume: 20 },
-  "slow and dramatic": { rate: 0.3, pitch: "-100Hz", volume: 100 },
-  fast:            { rate: 2.0, pitch: "+80Hz", volume: 100 },
-  nervous:         { rate: 1.3, pitch: "+180Hz", volume: 90 },
-  crying:          { rate: 0.5, pitch: "-250Hz", volume: 80 },
-  angry:           { rate: 1.4, pitch: "-150Hz", volume: 100 },
-  calm:            { rate: 0.7, pitch: "-50Hz", volume: 85 },
-  laughing:        { rate: 1.2, pitch: "+180Hz", volume: 100 },
-  sarcastic:       { rate: 0.9, pitch: "+250Hz", volume: 100 },
-  storytelling:    { rate: 0.85, pitch: "+0Hz", volume: 100 },
-  breathless:      { rate: 1.6, pitch: "+120Hz", volume: 80 },
+// Map conditions to SSML prosody for expressive speech
+const CONDITION_PROSODY: Record<string, { rate: string; pitch: string }> = {
+  excited:         { rate: "fast",    pitch: "+200Hz" },
+  whisper:         { rate: "slow",    pitch: "-150Hz" },
+  "slow and dramatic": { rate: "x-slow", pitch: "-100Hz" },
+  fast:            { rate: "x-fast",  pitch: "+80Hz" },
+  nervous:         { rate: "fast",    pitch: "+180Hz" },
+  crying:          { rate: "x-slow",  pitch: "-250Hz" },
+  angry:           { rate: "fast",    pitch: "-150Hz" },
+  calm:            { rate: "slow",    pitch: "-50Hz" },
+  laughing:        { rate: "fast",    pitch: "+200Hz" },
+  sarcastic:       { rate: "medium",  pitch: "+250Hz" },
+  storytelling:    { rate: "slow",    pitch: "+0Hz" },
+  breathless:      { rate: "x-fast",  pitch: "+120Hz" },
 };
 
-const DEFAULT_PROSODY: Prosody = { rate: 1.0, pitch: "+0Hz", volume: 100 };
+const DEFAULT = { rate: "medium", pitch: "+0Hz" };
 
 interface Segment {
   text: string;
@@ -58,15 +53,18 @@ function parseScript(script: string): Segment[] {
   return segments;
 }
 
+function escapeXml(text: string): string {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const parsed = RequestSchema.safeParse(body);
 
     if (!parsed.success) {
-      const fieldErrors = parsed.error.flatten().fieldErrors;
       return NextResponse.json(
-        { error: "Validation failed", fields: fieldErrors },
+        { error: "Validation failed", fields: parsed.error.flatten().fieldErrors },
         { status: 400 }
       );
     }
@@ -78,40 +76,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
     }
 
-    // Generate audio per segment — fresh TTS instance each time (reliable)
-    const audioChunks: Buffer[] = [];
-
+    // Build text with SSML prosody per segment
+    let ssmlBody = "";
     for (const seg of segments) {
-      const text = seg.text.trim();
-      if (!text) continue;
-
-      const p = CONDITION_PROSODY[seg.condition ?? ""] ?? DEFAULT_PROSODY;
-
-      const tts = new MsEdgeTTS();
-      await tts.setMetadata("en-US-AvaNeural", OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
-
-      const { audioStream } = await tts.toStream(text, {
-        rate: p.rate,
-        pitch: p.pitch,
-        volume: p.volume,
-      });
-
-      const chunks: Buffer[] = [];
-      await new Promise<void>((resolve, reject) => {
-        audioStream.on("data", (d: Buffer) => chunks.push(d));
-        audioStream.on("close", () => resolve());
-        audioStream.on("error", (e: Error) => reject(e));
-      });
-
-      audioChunks.push(Buffer.concat(chunks));
+      if (!seg.text.trim()) continue;
+      const p = CONDITION_PROSODY[seg.condition ?? ""] ?? DEFAULT;
+      ssmlBody += `<prosody rate="${p.rate}" pitch="${p.pitch}">${escapeXml(seg.text)}</prosody> `;
     }
 
-    if (audioChunks.length === 0) {
+    const ssml = `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis">${ssmlBody}</speak>`;
+
+    const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
+    if (!deepgramApiKey) {
+      return NextResponse.json({ error: "DEEPGRAM_API_KEY not configured" }, { status: 500 });
+    }
+
+    const deepgram = new DeepgramClient({ apiKey: deepgramApiKey });
+    const result = await deepgram.speak.v1.audio.generate({
+      text: ssml,
+      model: "aura-2-thalia-en",
+    });
+
+    // Collect the audio stream using Web Streams API
+    const audioStream = result.stream();
+    if (!audioStream) {
+      return NextResponse.json({ error: "No audio stream returned" }, { status: 422 });
+    }
+    const reader = audioStream.getReader();
+    const chunks: Uint8Array[] = [];
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    if (chunks.length === 0) {
       return NextResponse.json({ error: "No audio generated" }, { status: 422 });
     }
 
-    // Concatenate all MP3 segments (same encoding = safe to concat)
-    const fullAudio = Buffer.concat(audioChunks);
+    const fullAudio = Buffer.concat(chunks.map((c) => Buffer.from(c)));
 
     return new NextResponse(fullAudio, {
       status: 200,
@@ -122,9 +125,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("[tts] Error:", err);
-    return NextResponse.json(
-      { error: "Speech generation failed. Try again." },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Speech generation failed" }, { status: 500 });
   }
 }
