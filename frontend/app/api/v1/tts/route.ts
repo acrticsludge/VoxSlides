@@ -6,17 +6,15 @@ const RequestSchema = z.object({
   script: z.string().min(1, "Script is required").max(5000, "Script too long"),
 });
 
-// Text-level emotional cues — natural phrasing that implies emotion through words
-// and sentence structure, so Deepgram's neural voice delivers with the right tone.
-// No literal sound effects (gasp, sniff, ha ha) — TTS reads those literally.
-const EMOTION_CUES: Record<string, { prefix: string; suffix: string; casing: "normal" | "upper" }> = {
+// Fallback cues if Gemini is unavailable
+const FALLBACK_CUES: Record<string, { prefix: string; suffix: string; casing: "normal" | "upper" }> = {
   excited:         { prefix: "I can not believe it! ", suffix: " This is amazing!", casing: "normal" },
   whisper:         { prefix: "listen... ",             suffix: "... do not tell anyone...", casing: "normal" },
   "slow and dramatic": { prefix: "nobody... knew... ", suffix: "... it was... too late...", casing: "normal" },
-  fast:            { prefix: "",                      suffix: " hurry!", casing: "normal" },
+  fast:            { prefix: "",                       suffix: " hurry!", casing: "normal" },
   nervous:         { prefix: "well... I mean... ",     suffix: "... at least I think so...", casing: "normal" },
   crying:          { prefix: "I just... ",             suffix: "... I can not... believe it...", casing: "normal" },
-  angry:           { prefix: "",                      suffix: " I have had it!", casing: "upper" },
+  angry:           { prefix: "",                       suffix: " I have had it!", casing: "upper" },
   calm:            { prefix: "it is okay... ",         suffix: "... everything is fine...", casing: "normal" },
   laughing:        { prefix: "oh my god! ",            suffix: " that is too funny!", casing: "normal" },
   sarcastic:       { prefix: "oh really? ",            suffix: "... yeah right.", casing: "normal" },
@@ -53,6 +51,68 @@ function parseScript(script: string): Segment[] {
   return segments;
 }
 
+/** Call Gemini to rewrite a sentence with emotional expression */
+async function expressWithGemini(
+  text: string,
+  emotion: string,
+  apiKey: string
+): Promise<string | null> {
+  const prompt = `Rewrite this sentence to sound genuinely ${emotion} in a natural speaking voice. Make it sound like a real person expressing ${emotion}, not like a robot.
+Return ONLY the rewritten sentence, nothing else. No quotation marks, no labels.
+
+Sentence: "${text}"`;
+
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.8,
+            maxOutputTokens: 150,
+          },
+        }),
+      }
+    );
+
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const rewritten = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+    return rewritten && rewritten.length > 0 ? rewritten : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Apply emotional expression to a segment — try Gemini first, fall back to hardcoded cues */
+async function expressSegment(
+  text: string,
+  condition: string | null,
+  geminiKey: string | undefined
+): Promise<string> {
+  if (!condition) return text;
+
+  // Try Gemini
+  if (geminiKey) {
+    const aiResult = await expressWithGemini(text, condition, geminiKey);
+    if (aiResult) return aiResult;
+  }
+
+  // Fallback to hardcoded cues
+  const cues = FALLBACK_CUES[condition];
+  if (!cues) return text;
+
+  let result = text;
+  if (cues.casing === "upper") result = result.toUpperCase();
+  if (cues.prefix) result = cues.prefix + result;
+  if (cues.suffix) result = result + cues.suffix;
+  return result;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -67,27 +127,18 @@ export async function POST(req: NextRequest) {
 
     const { script } = parsed.data;
     const segments = parseScript(script);
-
     if (segments.length === 0) {
       return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
     }
 
-    // Build naturally expressive text from segments using text-level cues only
-    let fullText = "";
-    for (const seg of segments) {
-      let text = seg.text.trim();
-      if (!text) continue;
+    const geminiKey = process.env.GEMINI_API_KEY;
 
-      const cues = EMOTION_CUES[seg.condition ?? ""];
-      if (cues) {
-        if (cues.casing === "upper") text = text.toUpperCase();
-        if (cues.prefix) text = cues.prefix + text;
-        if (cues.suffix && !text.endsWith(cues.suffix)) text = text + cues.suffix;
-      }
-      fullText += text + " ";
-    }
+    // Express each segment with AI-generated emotional phrasing
+    const expressed = await Promise.all(
+      segments.map((seg) => expressSegment(seg.text, seg.condition, geminiKey))
+    );
 
-    fullText = fullText.trim();
+    let fullText = expressed.filter(Boolean).join(" ").trim();
     if (!fullText) {
       return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
     }
