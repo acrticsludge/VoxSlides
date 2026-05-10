@@ -9,5 +9,5 @@ export function compileScript(text: string, slots: Slot[]): string {
     result = result.slice(0, slot.position) + tag + result.slice(slot.position);
   }
 
-  return "Speaker 1: " + result;
+  return "Speaker 1: " + result.replace(/\s+/g, " ").trim();
 }

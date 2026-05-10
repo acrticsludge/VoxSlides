@@ -45,6 +45,10 @@ export function SlotEditor({
 
   const addSlot = useCallback(
     (condition: string, isCustom: boolean) => {
+      // Insert a space at cursor position so the slot has its own spot
+      const newText = text.slice(0, cursorPos) + " " + text.slice(cursorPos);
+      onTextChange(newText);
+
       const newSlot: Slot = {
         id: crypto.randomUUID(),
         position: cursorPos,
@@ -53,11 +57,19 @@ export function SlotEditor({
       };
       const newSlots = [...slots, newSlot];
       onSlotsChange(newSlots);
-      const compiled = compileScript(text, newSlots);
+      const compiled = compileScript(newText, newSlots);
       onCompiledChange(compiled);
       setPickerOpen(false);
+
+      // Auto-focus textarea and put cursor after the space
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          textareaRef.current.setSelectionRange(cursorPos + 1, cursorPos + 1);
+        }
+      });
     },
-    [cursorPos, slots, text, onSlotsChange, onCompiledChange]
+    [cursorPos, slots, text, onSlotsChange, onTextChange, onCompiledChange]
   );
 
   const removeSlot = useCallback(

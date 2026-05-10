@@ -74,9 +74,8 @@ export function AudioPlayer({ text }: AudioPlayerProps) {
                 style={{
                   height: speaking ? `${8 + Math.sin(i * 0.8) * 6 + 6}px` : "4px",
                   animation: speaking
-                    ? `waveform ${0.6 + (i % 5) * 0.1}s ease-in-out infinite alternate`
+                    ? `waveform ${0.6 + (i % 5) * 0.1}s ease-in-out ${i * 0.06}s infinite alternate`
                     : "none",
-                  animationDelay: `${i * 0.06}s`,
                 }}
               />
             ))}
