@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Play, Pause, StopCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BlurFade } from "@/components/ui/blur-fade";
+import { speakScript } from "@/lib/speech";
 
 interface AudioPlayerProps {
   text: string;
@@ -12,9 +13,9 @@ interface AudioPlayerProps {
 export function AudioPlayer({ text }: AudioPlayerProps) {
   const [speaking, setSpeaking] = useState(false);
   const [paused, setPaused] = useState(false);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const cancelRef = useRef<(() => void) | null>(null);
 
-  // Stop any existing speech when text changes
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       window.speechSynthesis?.cancel();
@@ -22,27 +23,18 @@ export function AudioPlayer({ text }: AudioPlayerProps) {
   }, []);
 
   const speak = useCallback(() => {
-    window.speechSynthesis.cancel();
+    setSpeaking(true);
+    setPaused(false);
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-
-    // Try to find a good English voice
-    const voices = window.speechSynthesis.getVoices();
-    const preferred = voices.find(
-      (v) => v.lang.startsWith("en") && v.name.includes("Natural")
-    ) ?? voices.find((v) => v.lang.startsWith("en") && v.name.includes("Neural"))
-      ?? voices.find((v) => v.lang.startsWith("en"));
-    if (preferred) utterance.voice = preferred;
-
-    utterance.onstart = () => { setSpeaking(true); setPaused(false); };
-    utterance.onend = () => { setSpeaking(false); setPaused(false); };
-    utterance.onerror = () => { setSpeaking(false); setPaused(false); };
-
-    utteranceRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
+    cancelRef.current = speakScript(
+      text,
+      () => {},
+      () => {
+        setSpeaking(false);
+        setPaused(false);
+        cancelRef.current = null;
+      }
+    );
   }, [text]);
 
   const pause = useCallback(() => {
@@ -56,12 +48,13 @@ export function AudioPlayer({ text }: AudioPlayerProps) {
   }, []);
 
   const stop = useCallback(() => {
-    window.speechSynthesis.cancel();
+    cancelRef.current?.();
+    cancelRef.current = null;
     setSpeaking(false);
     setPaused(false);
   }, []);
 
-  // Auto-speak when mounted with new text
+  // Auto-speak when text changes
   useEffect(() => {
     if (text) speak();
   }, [text, speak]);
@@ -131,6 +124,12 @@ export function AudioPlayer({ text }: AudioPlayerProps) {
               </Button>
             )}
           </div>
+
+          {speaking && (
+            <p className="text-xs text-center text-muted-foreground mt-3">
+              Speaking with expressive tone...
+            </p>
+          )}
         </div>
       </BlurFade>
     </div>
