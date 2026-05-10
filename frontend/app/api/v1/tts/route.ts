@@ -1,36 +1,64 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DeepgramClient } from "@deepgram/sdk";
 import { z } from "zod";
 
 const RequestSchema = z.object({
   script: z.string().min(1, "Script is required").max(5000, "Script too long"),
+  speakerAudio: z.string().min(1, "Speaker audio is required"),
 });
 
-// Modify text subtly — NO extra words, NO prefix/suffix phrases.
-// Just change punctuation and casing on the user's existing words.
-interface Modifier {
-  /** Ensure text ends with this punctuation (add if missing) */
-  punctuation?: string;
-  /** Transform casing */
-  casing?: "upper" | "lower" | "normal";
-  /** Wrap text with pauses */
-  pauses?: "before" | "after" | "both" | "none";
-}
-
-const MODIFIERS: Record<string, Modifier> = {
-  excited:         { punctuation: "!", casing: "normal", pauses: "none" },
-  whisper:         { punctuation: "...", casing: "normal", pauses: "both" },
-  "slow and dramatic": { punctuation: "...", casing: "normal", pauses: "after" },
-  fast:            { punctuation: "!", casing: "normal", pauses: "none" },
-  nervous:         { punctuation: "...", casing: "normal", pauses: "after" },
-  crying:          { punctuation: "...", casing: "normal", pauses: "after" },
-  angry:           { punctuation: "!", casing: "upper", pauses: "none" },
-  calm:            { punctuation: "...", casing: "lower", pauses: "both" },
-  laughing:        { punctuation: "!", casing: "normal", pauses: "none" },
-  sarcastic:       { punctuation: ".", casing: "normal", pauses: "none" },
-  storytelling:    { punctuation: "...", casing: "normal", pauses: "after" },
-  breathless:      { punctuation: "...", casing: "normal", pauses: "after" },
+// Subtle text modifiers — just punctuation & casing, no extra words
+// The cloned voice delivers these naturally
+const MODIFIERS: Record<string, { punct: string; casing: "upper" | "lower" | "normal"; pause: string }> = {
+  excited:         { punct: "!", casing: "normal", pause: "" },
+  whisper:         { punct: "...", casing: "normal", pause: "..." },
+  "slow and dramatic": { punct: "...", casing: "normal", pause: "..." },
+  fast:            { punct: "!", casing: "normal", pause: "" },
+  nervous:         { punct: "...", casing: "normal", pause: "..." },
+  crying:          { punct: "...", casing: "normal", pause: "..." },
+  angry:           { punct: "!", casing: "upper", pause: "" },
+  calm:            { punct: "...", casing: "lower", pause: "..." },
+  laughing:        { punct: "!", casing: "normal", pause: "" },
+  sarcastic:       { punct: ".", casing: "normal", pause: "" },
+  storytelling:    { punct: "...", casing: "normal", pause: "..." },
+  breathless:      { punct: "...", casing: "normal", pause: "..." },
 };
+
+const REPLICATE_API = "https://api.replicate.com/v1";
+
+async function uploadAudioToReplicate(
+  base64Data: string,
+  apiKey: string
+): Promise<string> {
+  // Convert base64 to buffer
+  const raw = base64Data.split(",").pop() ?? base64Data;
+  const buffer = Buffer.from(raw, "base64");
+
+  // Determine content type from base64 header
+  const mime = base64Data.startsWith("data:") 
+    ? base64Data.split(",")[0].split(":")[1].split(";")[0]
+    : "audio/wav";
+
+  const ext = mime.includes("mp3") ? "mp3" : "wav";
+
+  // Upload to Replicate's file storage
+  const form = new FormData();
+  const blob = new Blob([buffer], { type: mime });
+  form.append("content", blob, `speaker.${ext}`);
+
+  const res = await fetch(`${REPLICATE_API}/files`, {
+    method: "POST",
+    headers: { Authorization: `Token ${apiKey}` },
+    body: form,
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Upload failed: ${err}`);
+  }
+
+  const data = await res.json();
+  return data.urls?.get;
+}
 
 interface Segment {
   text: string;
@@ -61,40 +89,29 @@ function parseScript(script: string): Segment[] {
   return segments;
 }
 
-/** Apply subtle modifications to text — NO new phrases added */
-function modifyText(text: string, condition: string | null): string {
+function addEmotion(text: string, condition: string | null): string {
   if (!condition) return text;
-
   const mod = MODIFIERS[condition];
   if (!mod) return text;
 
-  let result = text;
+  let t = text;
+  if (mod.casing === "upper") t = t.toUpperCase();
+  else if (mod.casing === "lower") t = t.toLowerCase();
 
-  // Change casing
-  if (mod.casing === "upper") result = result.toUpperCase();
-  else if (mod.casing === "lower") result = result.toLowerCase();
-
-  // Ensure punctuation (only add if missing, don't duplicate)
-  if (mod.punctuation) {
-    const last = result.trim().slice(-1);
-    const isPunct = /[.!?…]/.test(last);
-    if (!isPunct) {
-      result = result.trim() + mod.punctuation;
-    } else if (last !== mod.punctuation && mod.punctuation !== ".") {
-      // Replace weak punctuation with stronger one
-      result = result.trim().slice(0, -1) + mod.punctuation;
-    }
+  // Add punctuation if missing
+  const last = t.trim().slice(-1);
+  if (!/[.!?…]/.test(last)) {
+    t = t.trim() + mod.punct;
+  } else if (mod.punct === "!" && last === ".") {
+    t = t.trim().slice(0, -1) + "!";
   }
 
-  // Add pauses
-  if (mod.pauses === "both" || mod.pauses === "before") {
-    result = "... " + result.trimStart();
-  }
-  if (mod.pauses === "both" || mod.pauses === "after") {
-    result = result.trimEnd() + " ...";
+  // Add pause markers
+  if (mod.pause) {
+    t = `... ${t.trim()} ...`;
   }
 
-  return result;
+  return t;
 }
 
 export async function POST(req: NextRequest) {
@@ -109,62 +126,107 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { script } = parsed.data;
-    const segments = parseScript(script);
+    const { script, speakerAudio } = parsed.data;
+    const apiKey = process.env.REPLICATE_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json({ error: "REPLICATE_API_KEY not configured" }, { status: 500 });
+    }
 
-    // Build text by modifying each segment subtly
+    // Parse and add emotional expression to each segment
+    const segments = parseScript(script);
     let fullText = segments
-      .map((seg) => modifyText(seg.text, seg.condition))
+      .map((seg) => addEmotion(seg.text, seg.condition))
       .filter(Boolean)
       .join(" ")
-      .trim();
-
-    // Clean up extra spaces around punctuation
-    fullText = fullText
+      .trim()
       .replace(/\s+\.\.\./g, "...")
-      .replace(/\.\.\.\s+/g, "... ")
-      .replace(/\s+!/g, "!")
-      .replace(/\s+\?/g, "?");
+      .replace(/\.\.\.\s+/g, "... ");
 
     if (!fullText) {
       return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
     }
 
-    const deepgramApiKey = process.env.DEEPGRAM_API_KEY;
-    if (!deepgramApiKey) {
-      return NextResponse.json({ error: "DEEPGRAM_API_KEY not configured" }, { status: 500 });
+    // Upload the voice sample to Replicate storage
+    let speakerUrl: string;
+    try {
+      speakerUrl = await uploadAudioToReplicate(speakerAudio, apiKey);
+    } catch (err) {
+      console.error("[tts] Upload failed:", err);
+      return NextResponse.json({ error: "Voice sample upload failed" }, { status: 502 });
     }
 
-    const deepgram = new DeepgramClient({ apiKey: deepgramApiKey });
-    const result = await deepgram.speak.v1.audio.generate({
-      text: fullText,
-      model: "aura-2-thalia-en",
+    // Start Replicate prediction
+    const predRes = await fetch(`${REPLICATE_API}/predictions`, {
+      method: "POST",
+      headers: {
+        Authorization: `Token ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        version: "26a2b076e0b47af38a85a9c7f5c6b68b4eae8bb55190ce0a16e28adef4941e01",
+        input: {
+          text: fullText,
+          speaker_audio: speakerUrl,
+          language: "en",
+        },
+      }),
     });
 
-    const audioStream = result.stream();
-    if (!audioStream) {
-      return NextResponse.json({ error: "No audio stream returned" }, { status: 422 });
+    if (!predRes.ok) {
+      const err = await predRes.text();
+      console.error("[tts] Prediction start failed:", err);
+      return NextResponse.json({ error: "Speech generation failed" }, { status: 502 });
     }
 
-    const reader = audioStream.getReader();
-    const chunks: Uint8Array[] = [];
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
+    const prediction = await predRes.json();
+    const getUrl = prediction.urls?.get;
+    if (!getUrl) {
+      return NextResponse.json({ error: "No prediction URL returned" }, { status: 502 });
     }
 
-    if (chunks.length === 0) {
-      return NextResponse.json({ error: "No audio generated" }, { status: 422 });
+    // Poll for completion (up to 2 minutes)
+    let outputUrl: string | null = null;
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+
+      const statusRes = await fetch(getUrl, {
+        headers: { Authorization: `Token ${apiKey}` },
+      });
+      if (!statusRes.ok) continue;
+
+      const status = await statusRes.json();
+
+      if (status.status === "succeeded") {
+        outputUrl = status.output;
+        break;
+      }
+
+      if (status.status === "failed") {
+        console.error("[tts] Prediction failed:", status.error);
+        return NextResponse.json({ error: "Speech generation failed" }, { status: 502 });
+      }
     }
 
-    const fullAudio = Buffer.concat(chunks.map((c) => Buffer.from(c)));
+    if (!outputUrl) {
+      return NextResponse.json({ error: "Speech generation timed out" }, { status: 504 });
+    }
 
-    return new NextResponse(fullAudio, {
+    // Handle output - might be a URL string or array of URLs
+    const audioUrl = Array.isArray(outputUrl) ? outputUrl[0] : outputUrl;
+
+    // Fetch the generated audio
+    const audioRes = await fetch(audioUrl);
+    if (!audioRes.ok) {
+      return NextResponse.json({ error: "Failed to fetch generated audio" }, { status: 502 });
+    }
+
+    const audioBuffer = await audioRes.arrayBuffer();
+
+    return new NextResponse(audioBuffer, {
       status: 200,
       headers: {
-        "Content-Type": "audio/mpeg",
-        "Content-Disposition": 'inline; filename="voxslides-output.mp3"',
+        "Content-Type": "audio/wav",
+        "Content-Disposition": 'inline; filename="voxslides-output.wav"',
       },
     });
   } catch (err) {
