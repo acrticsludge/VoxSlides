@@ -6,8 +6,7 @@ import { SlotEditor } from "@/components/slot-editor/SlotEditor";
 import { AudioPlayer } from "@/components/audio-player/AudioPlayer";
 import { HistorySheet, addToHistory } from "@/components/history/HistorySheet";
 import { PRESET_CONDITIONS } from "@/lib/conditions";
-import { Toaster } from "@/components/ui/sonner";
-import { toast } from "sonner";
+import toast, { Toaster } from "react-hot-toast";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { BorderBeam } from "@/components/ui/border-beam";
 
@@ -21,9 +20,7 @@ export default function Home() {
 
   const handleGenerate = useCallback(async () => {
     if (!compiledScript.trim()) {
-      toast.error("Script required", {
-        description: "Type a script before generating.",
-      });
+      toast.error("Type a script before generating.");
       return;
     }
 
@@ -32,7 +29,7 @@ export default function Home() {
     setAudioUrl(null);
 
     try {
-      const res = await fetch("/api/tts", {
+      const res = await fetch("/api/v1/tts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ script: compiledScript }),
@@ -58,13 +55,9 @@ export default function Home() {
       };
       addToHistory(generation);
 
-      toast.success("Generation complete", {
-        description: "Your audio is ready to play.",
-      });
+      toast.success("Generation complete — your audio is ready to play.");
     } catch (err) {
-      toast.error("Generation failed", {
-        description: err instanceof Error ? err.message : "Something went wrong",
-      });
+      toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setGenerating(false);
       setLoadingState("idle");
@@ -80,7 +73,16 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Toaster position="top-center" />
+      <Toaster
+        position="top-center"
+        toastOptions={{
+          style: {
+            background: "#111113",
+            color: "#fafafa",
+            border: "1px solid #27272a",
+          },
+        }}
+      />
 
       <header className="flex items-center justify-between px-6 py-4 border-b border-border">
         <h1
