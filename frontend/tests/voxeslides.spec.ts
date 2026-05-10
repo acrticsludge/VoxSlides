@@ -1,4 +1,20 @@
 import { test, expect } from "@playwright/test";
+import path from "path";
+
+// Helper: upload a mock audio file to enable the generate button
+async function uploadMockAudio(page: any) {
+  // Create a minimal WAV file buffer
+  const wav = Buffer.alloc(44);
+  wav.write("RIFF", 0);
+  wav.write("WAVE", 8);
+  // Set file input and trigger change
+  const fileInput = page.locator('input[type="file"]');
+  await fileInput.setInputFiles({
+    name: "test.wav",
+    mimeType: "audio/wav",
+    buffer: wav,
+  });
+}
 
 test.describe("VoxSlides", () => {
   test("page loads with editor visible", async ({ page }) => {
@@ -35,31 +51,29 @@ test.describe("VoxSlides", () => {
   test("generate button shows loading state", async ({ page }) => {
     await page.route("/api/v1/tts", async (route) => {
       await new Promise((r) => setTimeout(r, 500));
-      const webm = Buffer.alloc(44);
-      webm.write("webm", 0);
-      await route.fulfill({
-        status: 200,
-        contentType: "audio/webm",
-        body: webm,
-      });
+      const wav = Buffer.alloc(44);
+      wav.write("RIFF", 0);
+      await route.fulfill({ status: 200, contentType: "audio/wav", body: wav });
     });
 
     await page.goto("/");
+    await uploadMockAudio(page);
     await page.getByTestId("textarea").fill("Testing generation");
     await page.locator('[data-testid="generate-btn"]').click();
     await expect(page.locator('[data-testid="generate-btn"]')).toContainText(
-      /Generating|Connecting|neural/i
+      /Uploading|Cloning|Clone|Generate/i
     );
   });
 
   test("audio player appears after generation", async ({ page }) => {
     await page.route("/api/v1/tts", async (route) => {
-      const webm = Buffer.alloc(44);
-      webm.write("webm", 0);
-      await route.fulfill({ status: 200, contentType: "audio/webm", body: webm });
+      const wav = Buffer.alloc(44);
+      wav.write("RIFF", 0);
+      await route.fulfill({ status: 200, contentType: "audio/wav", body: wav });
     });
 
     await page.goto("/");
+    await uploadMockAudio(page);
     await page.getByTestId("textarea").fill("Hello VoxSlides");
     await page.locator('[data-testid="generate-btn"]').click();
     await expect(page.locator('[data-testid="audio-player"]')).toBeVisible({
@@ -69,12 +83,13 @@ test.describe("VoxSlides", () => {
 
   test("generation saved to history", async ({ page }) => {
     await page.route("/api/v1/tts", async (route) => {
-      const webm = Buffer.alloc(44);
-      webm.write("webm", 0);
-      await route.fulfill({ status: 200, contentType: "audio/webm", body: webm });
+      const wav = Buffer.alloc(44);
+      wav.write("RIFF", 0);
+      await route.fulfill({ status: 200, contentType: "audio/wav", body: wav });
     });
 
     await page.goto("/");
+    await uploadMockAudio(page);
     await page.getByTestId("textarea").fill("History test");
     await page.locator('[data-testid="generate-btn"]').click();
     await page
