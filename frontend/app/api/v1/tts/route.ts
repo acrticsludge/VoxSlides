@@ -6,21 +6,22 @@ const RequestSchema = z.object({
   script: z.string().min(1, "Script is required").max(5000, "Script too long"),
 });
 
-// Text-level emotional cues — each condition has a UNIQUE speaking pattern
-// so Deepgram's neural voice reads them with naturally different delivery
+// Text-level emotional cues — natural phrasing that implies emotion through words
+// and sentence structure, so Deepgram's neural voice delivers with the right tone.
+// No literal sound effects (gasp, sniff, ha ha) — TTS reads those literally.
 const EMOTION_CUES: Record<string, { prefix: string; suffix: string; casing: "normal" | "upper" }> = {
-  excited:         { prefix: "Wow! ",                 suffix: "! Incredible!", casing: "normal" },
-  whisper:         { prefix: "... pssst... ",          suffix: "... shhh...",   casing: "normal" },
-  "slow and dramatic": { prefix: "... ... ... ",       suffix: "... ...",       casing: "normal" },
-  fast:            { prefix: "",                      suffix: "! Right now!",  casing: "normal" },
-  nervous:         { prefix: "Uhh... well... ",        suffix: "... I think...", casing: "normal" },
-  crying:          { prefix: "sniff... ",              suffix: "... sob...",    casing: "normal" },
-  angry:           { prefix: "Grrr! ",                suffix: "! Enough!",     casing: "upper" },
-  calm:            { prefix: "Ahh... ",                suffix: "... mmh...",    casing: "normal" },
-  laughing:        { prefix: "Ha ha! ",               suffix: "... hee hee!",  casing: "normal" },
-  sarcastic:       { prefix: "Ohhh... really? ",      suffix: "... sure.",     casing: "normal" },
-  storytelling:    { prefix: "Once upon a time... ",   suffix: "...",           casing: "normal" },
-  breathless:      { prefix: "*gasp*... ",            suffix: "... *huff*...", casing: "normal" },
+  excited:         { prefix: "I can not believe it! ", suffix: " This is amazing!", casing: "normal" },
+  whisper:         { prefix: "listen... ",             suffix: "... do not tell anyone...", casing: "normal" },
+  "slow and dramatic": { prefix: "nobody... knew... ", suffix: "... it was... too late...", casing: "normal" },
+  fast:            { prefix: "",                      suffix: " hurry!", casing: "normal" },
+  nervous:         { prefix: "well... I mean... ",     suffix: "... at least I think so...", casing: "normal" },
+  crying:          { prefix: "I just... ",             suffix: "... I can not... believe it...", casing: "normal" },
+  angry:           { prefix: "",                      suffix: " I have had it!", casing: "upper" },
+  calm:            { prefix: "it is okay... ",         suffix: "... everything is fine...", casing: "normal" },
+  laughing:        { prefix: "oh my god! ",            suffix: " that is too funny!", casing: "normal" },
+  sarcastic:       { prefix: "oh really? ",            suffix: "... yeah right.", casing: "normal" },
+  storytelling:    { prefix: "now... ",                suffix: "...", casing: "normal" },
+  breathless:      { prefix: "I... I can't... ",       suffix: "... can barely... breathe...", casing: "normal" },
 };
 
 interface Segment {
