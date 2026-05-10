@@ -45,7 +45,7 @@ export function SlotEditor({
 
   const addSlot = useCallback(
     (condition: string, isCustom: boolean) => {
-      // Insert a space at cursor position so the slot has its own spot
+      // Place the slot at cursor position in the text
       const newText = text.slice(0, cursorPos) + " " + text.slice(cursorPos);
       onTextChange(newText);
 
@@ -61,7 +61,7 @@ export function SlotEditor({
       onCompiledChange(compiled);
       setPickerOpen(false);
 
-      // Auto-focus textarea and put cursor after the space
+      // Focus textarea after the inserted space
       requestAnimationFrame(() => {
         if (textareaRef.current) {
           textareaRef.current.focus();
@@ -82,62 +82,40 @@ export function SlotEditor({
     [slots, text, onSlotsChange, onCompiledChange]
   );
 
-  const renderOverlay = () => {
-    if (slots.length === 0) return null;
-
-    const sorted = [...slots].sort((a, b) => a.position - b.position);
-    const parts: React.ReactNode[] = [];
-    let lastIdx = 0;
-
-    for (let i = 0; i < sorted.length; i++) {
-      const slot = sorted[i];
-      if (slot.position > lastIdx) {
-        parts.push(
-          <span key={`t-${i}`}>
-            {text.slice(lastIdx, slot.position)}
-          </span>
-        );
-      }
-      parts.push(<SlotChip key={`s-${slot.id}`} slot={slot} onRemove={removeSlot} />);
-      lastIdx = slot.position;
-    }
-
-    if (lastIdx < text.length) {
-      parts.push(<span key="t-end">{text.slice(lastIdx)}</span>);
-    }
-
-    return parts;
-  };
-
   const quickPresets = PRESET_CONDITIONS.slice(0, 6);
 
   return (
     <div className="space-y-3">
-      <div className="relative min-h-[16rem]">
-        <div
-          className="absolute inset-0 font-mono text-sm leading-relaxed p-3 pointer-events-none whitespace-pre-wrap break-words text-transparent z-10"
-          aria-hidden="true"
-        >
-          {renderOverlay()}
-        </div>
-        <textarea
-          ref={textareaRef}
-          data-testid="textarea"
-          value={text}
-          onChange={handleTextChange}
-          onKeyUp={syncCursor}
-          onClick={syncCursor}
-          placeholder="Type your script here..."
-          className={`
-            relative w-full h-64 p-3 font-mono text-sm leading-relaxed
-            bg-transparent border border-border rounded-lg
-            text-foreground caret-amber-400
-            placeholder:text-muted-foreground resize-y
-            focus:outline-none focus:shadow-[0_0_0_1px_var(--accent)]
-          `}
-        />
-      </div>
+      <textarea
+        ref={textareaRef}
+        data-testid="textarea"
+        value={text}
+        onChange={handleTextChange}
+        onKeyUp={syncCursor}
+        onClick={syncCursor}
+        onMouseUp={syncCursor}
+        placeholder="Type your script here..."
+        className={`
+          w-full h-64 p-3 font-mono text-sm leading-relaxed
+          bg-transparent border border-border rounded-lg
+          text-foreground caret-amber-400
+          placeholder:text-muted-foreground resize-y
+          focus:outline-none focus:shadow-[0_0_0_1px_var(--accent)]
+        `}
+        style={{ fontFamily: "var(--font-mono)" }}
+      />
 
+      {/* Active conditions bar — shows all currently added conditions */}
+      {slots.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-muted-foreground font-medium">Active:</span>
+          {slots.map((slot) => (
+            <SlotChip key={slot.id} slot={slot} onRemove={removeSlot} />
+          ))}
+        </div>
+      )}
+
+      {/* Quick-insert pills + add button */}
       <div className="flex items-center gap-2 flex-wrap">
         {quickPresets.map((preset) => (
           <button
