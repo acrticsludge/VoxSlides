@@ -9,8 +9,9 @@ import { PRESET_CONDITIONS } from "@/lib/conditions";
 import toast, { Toaster } from "react-hot-toast";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { BorderBeam } from "@/components/ui/border-beam";
-import { Upload, Mic, Trash2 } from "lucide-react";
+import { Upload, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { VoiceRecorder } from "@/components/voice-recorder/VoiceRecorder";
 
 const CONDITION_COLORS: Record<string, string> = {
   amber:   "bg-amber-500/20 text-amber-200 border-l-2 border-amber-400",
@@ -199,10 +200,13 @@ export default function Home() {
               ) : (
                 <div className="space-y-2">
                   <input ref={fileInputRef} type="file" accept="audio/*" onChange={handleFileUpload} className="hidden" />
-                  <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="w-full">
-                    <Upload className="h-3.5 w-3.5 mr-2" />
-                    Upload Audio
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="flex-1">
+                      <Upload className="h-3.5 w-3.5 mr-2" />
+                      Upload
+                    </Button>
+                    <VoiceRecorder onAudioReady={(data) => { setSpeakerAudio(data); setSpeakerFileName("Recorded Audio"); }} disabled={generating} />
+                  </div>
                 </div>
               )}
             </div>
