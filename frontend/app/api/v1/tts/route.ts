@@ -163,11 +163,12 @@ export async function POST(req: NextRequest) {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        version: "26a2b076e0b47af38a85a9c7f5c6b68b4eae8bb55190ce0a16e28adef4941e01",
+        version: "684bc3855b37866c0c65add2ff39c78f3dea3f4ff103a436465326e0f438d55e",
         input: {
           text: fullText,
-          speaker_audio: speakerUrl,
+          speaker: speakerUrl,
           language: "en",
+          cleanup_voice: true,
         },
       }),
     });

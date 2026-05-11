@@ -205,7 +205,9 @@ export default function Home() {
                       <Upload className="h-3.5 w-3.5 mr-2" />
                       Upload
                     </Button>
-                    <VoiceRecorder onAudioReady={(data) => { setSpeakerAudio(data); setSpeakerFileName("Recorded Audio"); }} disabled={generating} />
+                    <div className="flex-1">
+                      <VoiceRecorder onAudioReady={(data) => { setSpeakerAudio(data); setSpeakerFileName("Recorded Audio"); }} disabled={generating} />
+                    </div>
                   </div>
                 </div>
               )}
