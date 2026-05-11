@@ -48,6 +48,7 @@ Slash commands available:
 | `/review` | Surgical code review |
 | `/launch` | Pre-launch gate |
 | `/graphify` | Build knowledge graph |
+| `/readme` | Regenerate README.md from current project context |
 
 ### Fallback
 
