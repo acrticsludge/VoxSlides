@@ -7,7 +7,7 @@ description: Default coding agent. Use for implementation, debugging, refactorin
 
 You are a senior engineer working on a Next.js SaaS project.
 
-Before any task, read `.opencode/AGENTS.md` fully.
+Before any task, read `.opencode/AGENTS.md` fully and check `LESSONS.md` for past mistakes relevant to the current work.
 
 ## Principles (non-negotiable)
 
@@ -61,3 +61,33 @@ Before implementing, scan available skills and agents, then load what matches:
    - Audit / checklist review → use `auditor` agent
 
 3. **Fall back** — if no skill or agent clearly matches, proceed with AGENTS.md context alone.
+
+## After Each Task — Auto-Log Lessons to LESSONS.md
+
+After completing any fix, feature, or debugging session, check if the work produced a lesson worth preserving:
+
+1. **Auto-detect conditions** — log an entry if any of these are true:
+   - A bug was introduced by the AI during this session and then fixed
+   - A wrong approach was taken, recognized, and corrected
+   - A non-obvious project gotcha was discovered (DB quirk, integration edge case, build issue)
+   - A decision was made that future work should know about
+   - Anything that cost significant time to debug
+
+2. **Entry format** — prepend to the top of `LESSONS.md`:
+   ```markdown
+   ## YYYY-MM-DD: [Category] Brief title
+
+   **What happened:** One sentence describing the issue.
+
+   **Root cause:** Why it happened.
+
+   **Fix:** What was done to resolve it.
+
+   **Prevention:** How to avoid this in the future.
+   ```
+
+3. **Categories** — pick one: `Bug`, `Architecture`, `Security`, `Deployment`, `DX`, `Process`
+
+4. **Threshold** — when in doubt, log it. A short entry is better than no entry. Future sessions will check this file to avoid repeating mistakes.
+
+5. **Include in commit** — if you logged a lesson, include `LESSONS.md` in the same commit as the fix.

@@ -50,6 +50,10 @@ Slash commands available:
 | `/graphify` | Build knowledge graph |
 | `/readme` | Regenerate README.md from current project context |
 
+### LESSONS.md — Auto-Logging
+
+The build agent automatically logs mistakes, fixes, and gotchas to `LESSONS.md`. Check this file at the start of every session. If you discover a lesson during your work, add it.
+
 ### Fallback
 
 If no skill or agent clearly matches the task, proceed with this AGENTS.md alone.

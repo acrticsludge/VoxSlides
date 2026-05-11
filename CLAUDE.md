@@ -356,6 +356,12 @@ Run `opencode run -m deepseek/deepseek-v4-pro` to use Pro on a task. See `.openc
 - Graphify for architecture exploration and impact analysis
 - Run audits before every launch or major change
 
+## LESSONS.md
+
+- Tracked automatically — the build agent logs entries to `LESSONS.md` after significant fixes, mistakes, and gotcha discoveries.
+- No manual prompting needed. Entries use structured format: date, category, what happened, root cause, fix, prevention.
+- Check `LESSONS.md` at the start of every session to avoid repeating past mistakes.
+
 ## README.md
 
 - Run `/readme` to regenerate README.md after major changes.
