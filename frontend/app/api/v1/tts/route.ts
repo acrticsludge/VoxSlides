@@ -4,10 +4,97 @@ import { z } from "zod";
 
 const RequestSchema = z.object({
   script: z.string().min(1, "Script is required").max(5000, "Script too long"),
+  speakerAudio: z.string().optional(),
 });
 
-// SSML prosody values per emotion condition
-const CONDITION_PROSODY: Record<string, { rate: string; pitch: string; volume: number }> = {
+// ── ElevenLabs voice cloning helpers ──
+
+async function cloneVoice(audioBase64: string, apiKey: string): Promise<string> {
+  const raw = audioBase64.split(",").pop() ?? audioBase64;
+  const buffer = Buffer.from(raw, "base64");
+  const mime = audioBase64.startsWith("data:")
+    ? audioBase64.split(",")[0].split(";")[0].split(":").pop() ?? "audio/wav"
+    : "audio/wav";
+
+  const form = new FormData();
+  form.append("files", new Blob([buffer], { type: mime }), "voice.wav");
+  form.append("name", "voxslides-clone");
+
+  const res = await fetch("https://api.elevenlabs.io/v1/voices/add", {
+    method: "POST",
+    headers: { "xi-api-key": apiKey },
+    body: form,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`ElevenLabs clone failed (${res.status}): ${text}`);
+  }
+
+  const data = await res.json();
+  return data.voice_id;
+}
+
+async function generateWithElevenLabs(
+  text: string,
+  voiceId: string,
+  apiKey: string
+): Promise<Buffer> {
+  const res = await fetch(
+    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`,
+    {
+      method: "POST",
+      headers: {
+        "xi-api-key": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text,
+        model_id: "eleven_multilingual_v2",
+        voice_settings: {
+          stability: 0.35,
+          similarity_boost: 0.8,
+        },
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`ElevenLabs TTS failed (${res.status}): ${text}`);
+  }
+
+  const arrayBuffer = await res.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+// ── Emotion text modifiers (for ElevenLabs cloned voice) ──
+// The cloned voice delivers emotion naturally; we nudge with punctuation & casing.
+
+const MODIFIERS: Record<
+  string,
+  { punct: string; casing: "upper" | "lower" | "normal" }
+> = {
+  excited:         { punct: "!", casing: "normal" },
+  whisper:         { punct: "...", casing: "lower" },
+  "slow and dramatic": { punct: "...", casing: "normal" },
+  fast:            { punct: "!", casing: "normal" },
+  nervous:         { punct: "...", casing: "normal" },
+  crying:          { punct: "...", casing: "lower" },
+  angry:           { punct: "!", casing: "upper" },
+  calm:            { punct: "...", casing: "lower" },
+  laughing:        { punct: "!", casing: "normal" },
+  sarcastic:       { punct: ".", casing: "normal" },
+  storytelling:    { punct: "...", casing: "normal" },
+  breathless:      { punct: "...", casing: "lower" },
+};
+
+// ── SSML prosody (for msedge-tts fallback) ──
+
+const CONDITION_PROSODY: Record<
+  string,
+  { rate: string; pitch: string; volume: number }
+> = {
   excited:         { rate: "1.4",  pitch: "+150Hz", volume: 100 },
   whisper:         { rate: "0.6",  pitch: "-200Hz", volume: 20 },
   "slow and dramatic": { rate: "0.35", pitch: "-80Hz",  volume: 100 },
@@ -22,12 +109,14 @@ const CONDITION_PROSODY: Record<string, { rate: string; pitch: string; volume: n
   breathless:      { rate: "1.5",  pitch: "+150Hz", volume: 75 },
 };
 
-const DEFAULT = { rate: "1.0", pitch: "+0Hz", volume: 100 };
+const DEFAULT_PROSODY = { rate: "1.0", pitch: "+0Hz", volume: 100 };
 
 interface Segment {
   text: string;
   condition: string | null;
 }
+
+// ── Script utilities ──
 
 function parseScript(fullScript: string): Segment[] {
   const regex = /\[([^\]]+)\]\s*/g;
@@ -53,6 +142,25 @@ function parseScript(fullScript: string): Segment[] {
   return segments;
 }
 
+function applyModifiers(text: string, condition: string | null): string {
+  if (!condition) return text;
+  const mod = MODIFIERS[condition];
+  if (!mod) return text;
+
+  let t = text;
+  if (mod.casing === "upper") t = t.toUpperCase();
+  else if (mod.casing === "lower") t = t.toLowerCase();
+
+  const last = t.trim().slice(-1);
+  if (!/[.!?…]/.test(last)) {
+    t = t.trim() + mod.punct;
+  } else if (mod.punct === "!" && last === ".") {
+    t = t.trim().slice(0, -1) + "!";
+  }
+
+  return t;
+}
+
 function escapeXml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -64,7 +172,7 @@ function escapeXml(text: string): string {
 
 function buildSsml(segments: Segment[]): string {
   const parts = segments.map((seg) => {
-    const p = CONDITION_PROSODY[seg.condition ?? ""] ?? DEFAULT;
+    const p = CONDITION_PROSODY[seg.condition ?? ""] ?? DEFAULT_PROSODY;
     const text = escapeXml(seg.text);
     return `<prosody rate="${p.rate}" pitch="${p.pitch}" volume="${p.volume}">${text}</prosody>`;
   });
@@ -75,6 +183,31 @@ function buildSsml(segments: Segment[]): string {
   </voice>
 </speak>`;
 }
+
+// ── msedge-tts (free fallback) ──
+
+async function synthesizeWithEdge(segments: Segment[]): Promise<Buffer> {
+  const ssml = buildSsml(segments);
+  const tts = new MsEdgeTTS();
+  await tts.setMetadata(
+    "en-US-AvaNeural",
+    OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3
+  );
+
+    const { audioStream } = await tts.rawToStream(ssml);
+
+  const chunks: Buffer[] = [];
+  await new Promise<void>((resolve, reject) => {
+    audioStream.on("data", (d: Buffer) => chunks.push(d));
+    audioStream.on("close", () => resolve());
+    audioStream.on("error", (e: Error) => reject(e));
+  });
+
+  if (chunks.length === 0) throw new Error("No audio from msedge-tts");
+  return Buffer.concat(chunks);
+}
+
+// ── Route ──
 
 export async function POST(req: NextRequest) {
   try {
@@ -88,36 +221,70 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { script } = parsed.data;
+    const { script, speakerAudio } = parsed.data;
     const segments = parseScript(script);
 
     if (segments.length === 0) {
       return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
     }
 
-    // Build a single SSML document with all segments
-    const ssml = buildSsml(segments);
+    // ── Route: ElevenLabs voice cloning (if audio sample provided) ──
+    if (speakerAudio) {
+      const elKey = process.env.ELEVENLABS_API_KEY;
+      if (!elKey) {
+        return NextResponse.json(
+          { error: "ElevenLabs key not configured" },
+          { status: 500 }
+        );
+      }
 
-    // Synthesize in one request
-    const tts = new MsEdgeTTS();
-    await tts.setMetadata("en-US-AvaNeural", OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+      try {
+        // Clone voice from the provided sample
+        const voiceId = await cloneVoice(speakerAudio, elKey);
 
-    const { audioStream } = await tts.toStream(ssml);
+        // Build plain text with emotion modifiers
+        const fullText = segments
+          .map((seg) => applyModifiers(seg.text, seg.condition))
+          .filter(Boolean)
+          .join(" ")
+          .trim()
+          .replace(/\s+\.\.\./g, "...")
+          .replace(/\.\.\.\s+/g, "... ");
 
-    const chunks: Buffer[] = [];
-    await new Promise<void>((resolve, reject) => {
-      audioStream.on("data", (d: Buffer) => chunks.push(d));
-      audioStream.on("close", () => resolve());
-      audioStream.on("error", (e: Error) => reject(e));
-    });
+        if (!fullText) {
+          return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
+        }
 
-    if (chunks.length === 0) {
-      return NextResponse.json({ error: "No audio generated" }, { status: 422 });
+        const audio = await generateWithElevenLabs(fullText, voiceId, elKey);
+
+        return new NextResponse(new Uint8Array(audio), {
+          status: 200,
+          headers: {
+            "Content-Type": "audio/mpeg",
+            "Content-Disposition": 'inline; filename="voxslides-output.mp3"',
+          },
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "";
+        // If out of credits or rate-limited, fall through to msedge-tts
+        if (
+          msg.includes("401") ||
+          msg.includes("429") ||
+          msg.includes("quota") ||
+          msg.includes("characters")
+        ) {
+          console.warn("[tts] ElevenLabs failed, falling back to msedge-tts:", msg);
+        } else {
+          // Non-quota error — try fallback but log it
+          console.warn("[tts] ElevenLabs error, falling back to msedge-tts:", msg);
+        }
+      }
     }
 
-    const fullAudio = Buffer.concat(chunks);
+    // ── Fallback: msedge-tts (free, no voice cloning, SSML emotion) ──
+    const audio = await synthesizeWithEdge(segments);
 
-    return new NextResponse(fullAudio, {
+    return new NextResponse(new Uint8Array(audio), {
       status: 200,
       headers: {
         "Content-Type": "audio/mpeg",
