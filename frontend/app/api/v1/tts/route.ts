@@ -7,32 +7,49 @@ const RequestSchema = z.object({
   speakerAudio: z.string().optional(),
 });
 
-// ── ElevenLabs voice cloning helpers ──
+// ── ElevenLabs voice helpers ──
 
-async function cloneVoice(audioBase64: string, apiKey: string): Promise<string> {
-  const raw = audioBase64.split(",").pop() ?? audioBase64;
-  const buffer = Buffer.from(raw, "base64");
-  const mime = audioBase64.startsWith("data:")
-    ? audioBase64.split(",")[0].split(";")[0].split(":").pop() ?? "audio/wav"
-    : "audio/wav";
+// Preset ElevenLabs voice (free tier compatible — high quality, expressive)
+const PRESET_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
 
-  const form = new FormData();
-  form.append("files", new Blob([buffer], { type: mime }), "voice.wav");
-  form.append("name", "voxslides-clone");
+async function tryCloneVoice(audioBase64: string, apiKey: string): Promise<string | null> {
+  // Attempt instant voice clone (requires paid plan). Returns null if not permitted.
+  try {
+    const raw = audioBase64.split(",").pop() ?? audioBase64;
+    const buffer = Buffer.from(raw, "base64");
+    const mime = audioBase64.startsWith("data:")
+      ? audioBase64.split(",")[0].split(";")[0].split(":").pop() ?? "audio/wav"
+      : "audio/wav";
 
-  const res = await fetch("https://api.elevenlabs.io/v1/voices/add", {
-    method: "POST",
-    headers: { "xi-api-key": apiKey },
-    body: form,
-  });
+    const form = new FormData();
+    form.append("files", new Blob([buffer], { type: mime }), "voice.wav");
+    form.append("name", "voxslides-clone");
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`ElevenLabs clone failed (${res.status}): ${text}`);
+    const res = await fetch("https://api.elevenlabs.io/v1/voices/add", {
+      method: "POST",
+      headers: { "xi-api-key": apiKey },
+      body: form,
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      // missing_permissions means free tier → use preset voice
+      if (text.includes("missing_permissions") || text.includes("401")) {
+        console.warn("[tts] Voice cloning not available on this plan, using preset voice");
+        return null;
+      }
+      throw new Error(`ElevenLabs clone failed (${res.status}): ${text}`);
+    }
+
+    const data = await res.json();
+    return data.voice_id;
+  } catch (err) {
+    if (err instanceof Error && (err.message.includes("missing_permissions") || err.message.includes("401"))) {
+      console.warn("[tts] Voice cloning not available on this plan, using preset voice");
+      return null;
+    }
+    throw err;
   }
-
-  const data = await res.json();
-  return data.voice_id;
 }
 
 async function generateWithElevenLabs(
@@ -228,19 +245,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
     }
 
-    // ── Route: ElevenLabs voice cloning (if audio sample provided) ──
+    // ── Route: ElevenLabs premium TTS (uses voice cloning if available, otherwise preset voice) ──
     if (speakerAudio) {
       const elKey = process.env.ELEVENLABS_API_KEY;
       if (!elKey) {
-        return NextResponse.json(
-          { error: "ElevenLabs key not configured" },
-          { status: 500 }
-        );
-      }
-
-      try {
-        // Clone voice from the provided sample
-        const voiceId = await cloneVoice(speakerAudio, elKey);
+        console.warn("[tts] No ElevenLabs key, falling back to msedge-tts");
+      } else {
+        try {
+        // Try voice clone (paid plans) — falls back to preset voice (free tier)
+        const voiceId = (await tryCloneVoice(speakerAudio, elKey)) ?? PRESET_VOICE_ID;
 
         // Build plain text with emotion modifiers
         const fullText = segments
@@ -266,19 +279,9 @@ export async function POST(req: NextRequest) {
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : "";
-        // If out of credits or rate-limited, fall through to msedge-tts
-        if (
-          msg.includes("401") ||
-          msg.includes("429") ||
-          msg.includes("quota") ||
-          msg.includes("characters")
-        ) {
-          console.warn("[tts] ElevenLabs failed, falling back to msedge-tts:", msg);
-        } else {
-          // Non-quota error — try fallback but log it
-          console.warn("[tts] ElevenLabs error, falling back to msedge-tts:", msg);
-        }
+        console.warn("[tts] ElevenLabs error, falling back to msedge-tts:", msg);
       }
+      } // closes else
     }
 
     // ── Fallback: msedge-tts (free, no voice cloning, SSML emotion) ──
