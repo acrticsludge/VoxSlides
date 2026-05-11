@@ -74,7 +74,6 @@ export default function Home() {
   const [compiledScript, setCompiledScript] = useState("");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
-  const [loadingState, setLoadingState] = useState<"idle" | "warming" | "generating">("idle");
   const [speakerAudio, setSpeakerAudio] = useState<string | null>(null);
   const [speakerFileName, setSpeakerFileName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -112,13 +111,8 @@ export default function Home() {
       toast.error("Type a script before generating.");
       return;
     }
-    if (!speakerAudio) {
-      toast.error("Upload a voice sample first.");
-      return;
-    }
 
     setGenerating(true);
-    setLoadingState("warming");
     setAudioUrl(null);
 
     try {
@@ -127,7 +121,6 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           script: compiledScript,
-          speakerAudio,
         }),
       });
 
@@ -135,8 +128,6 @@ export default function Home() {
         const err = await res.json().catch(() => ({ error: "Generation failed" }));
         throw new Error(err.error || `HTTP ${res.status}`);
       }
-
-      setLoadingState("generating");
 
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -150,21 +141,18 @@ export default function Home() {
       };
       addToHistory(generation);
 
-      toast.success("Cloned voice audio ready");
+      toast.success("Audio ready");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setGenerating(false);
-      setLoadingState("idle");
     }
-  }, [compiledScript, slots, speakerAudio]);
+  }, [compiledScript, slots]);
 
   const handleReplay = useCallback((gen: Generation) => {
     setCompiledScript(gen.script);
     toast("Select the generation to replay");
   }, []);
-
-  const loadingLabel = loadingState === "warming" ? "Uploading voice sample..." : "Cloning voice with emotion...";
 
   return (
     <div className="min-h-screen bg-background">
@@ -188,7 +176,7 @@ export default function Home() {
             {/* Voice Sample */}
             <div className="p-4 rounded-lg border border-border bg-card">
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Voice Sample</h3>
-              <p className="text-xs text-muted-foreground mb-3">Upload a 10-30 second audio clip of the voice you want to clone.</p>
+              <p className="text-xs text-muted-foreground mb-3">Save a voice sample for premium voice cloning (coming soon). Free tier uses Microsoft Edge TTS.</p>
 
               {speakerAudio ? (
                 <div className="flex items-center justify-between gap-2 p-2 rounded bg-white/[0.03] border border-border">
@@ -236,8 +224,8 @@ export default function Home() {
         </div>
 
         <div className="mt-8 max-w-md mx-auto relative">
-          <ShimmerButton data-testid="generate-btn" onClick={handleGenerate} disabled={generating || !speakerAudio} className="w-full h-12 text-base font-semibold" background="#f5a623">
-            {generating ? loadingLabel : speakerAudio ? "Clone Voice & Generate" : "Upload a voice sample first"}
+          <ShimmerButton data-testid="generate-btn" onClick={handleGenerate} disabled={generating} className="w-full h-12 text-base font-semibold" background="#f5a623">
+            {generating ? "Generating with emotion..." : "Generate Speech"}
           </ShimmerButton>
           {generating && <BorderBeam />}
         </div>

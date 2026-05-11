@@ -1,79 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
+import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 import { z } from "zod";
 
 const RequestSchema = z.object({
   script: z.string().min(1, "Script is required").max(5000, "Script too long"),
-  speakerAudio: z.string().min(1, "Speaker audio is required"),
 });
 
-// Subtle text modifiers — just punctuation & casing, no extra words
-// The cloned voice delivers these naturally
-const MODIFIERS: Record<string, { punct: string; casing: "upper" | "lower" | "normal"; pause: string }> = {
-  excited:         { punct: "!", casing: "normal", pause: "" },
-  whisper:         { punct: "...", casing: "normal", pause: "..." },
-  "slow and dramatic": { punct: "...", casing: "normal", pause: "..." },
-  fast:            { punct: "!", casing: "normal", pause: "" },
-  nervous:         { punct: "...", casing: "normal", pause: "..." },
-  crying:          { punct: "...", casing: "normal", pause: "..." },
-  angry:           { punct: "!", casing: "upper", pause: "" },
-  calm:            { punct: "...", casing: "lower", pause: "..." },
-  laughing:        { punct: "!", casing: "normal", pause: "" },
-  sarcastic:       { punct: ".", casing: "normal", pause: "" },
-  storytelling:    { punct: "...", casing: "normal", pause: "..." },
-  breathless:      { punct: "...", casing: "normal", pause: "..." },
+// SSML prosody values per emotion condition
+const CONDITION_PROSODY: Record<string, { rate: string; pitch: string; volume: number }> = {
+  excited:         { rate: "1.4",  pitch: "+150Hz", volume: 100 },
+  whisper:         { rate: "0.6",  pitch: "-200Hz", volume: 20 },
+  "slow and dramatic": { rate: "0.35", pitch: "-80Hz",  volume: 100 },
+  fast:            { rate: "1.8",  pitch: "+60Hz",  volume: 100 },
+  nervous:         { rate: "1.3",  pitch: "+200Hz", volume: 90 },
+  crying:          { rate: "0.5",  pitch: "-300Hz", volume: 85 },
+  angry:           { rate: "1.3",  pitch: "-180Hz", volume: 100 },
+  calm:            { rate: "0.7",  pitch: "-30Hz",  volume: 80 },
+  laughing:        { rate: "1.2",  pitch: "+200Hz", volume: 100 },
+  sarcastic:       { rate: "0.9",  pitch: "+250Hz", volume: 100 },
+  storytelling:    { rate: "0.8",  pitch: "+0Hz",   volume: 100 },
+  breathless:      { rate: "1.5",  pitch: "+150Hz", volume: 75 },
 };
 
-const REPLICATE_API = "https://api.replicate.com/v1";
-
-async function uploadAudioToReplicate(
-  base64Data: string,
-  apiKey: string
-): Promise<string> {
-  // Convert base64 to buffer
-  const raw = base64Data.split(",").pop() ?? base64Data;
-  const buffer = Buffer.from(raw, "base64");
-
-  // Determine content type from base64 header
-  const mime = base64Data.startsWith("data:") 
-    ? base64Data.split(",")[0].split(":")[1].split(";")[0]
-    : "audio/wav";
-
-  const ext = mime.includes("mp3") ? "mp3" : "wav";
-
-  // Upload to Replicate's file storage
-  const form = new FormData();
-  const blob = new Blob([buffer], { type: mime });
-  form.append("content", blob, `speaker.${ext}`);
-
-  const res = await fetch(`${REPLICATE_API}/files`, {
-    method: "POST",
-    headers: { Authorization: `Token ${apiKey}` },
-    body: form,
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Upload failed: ${err}`);
-  }
-
-  const data = await res.json();
-  return data.urls?.get;
-}
+const DEFAULT = { rate: "1.0", pitch: "+0Hz", volume: 100 };
 
 interface Segment {
   text: string;
   condition: string | null;
 }
 
-function parseScript(script: string): Segment[] {
+function parseScript(fullScript: string): Segment[] {
   const regex = /\[([^\]]+)\]\s*/g;
   const segments: Segment[] = [];
   let lastIndex = 0;
   let currentCondition: string | null = null;
   let match: RegExpExecArray | null;
 
-  while ((match = regex.exec(script)) !== null) {
-    const before = script.slice(lastIndex, match.index);
+  while ((match = regex.exec(fullScript)) !== null) {
+    const before = fullScript.slice(lastIndex, match.index);
     if (before.trim()) {
       segments.push({ text: before.trim(), condition: currentCondition });
     }
@@ -81,7 +45,7 @@ function parseScript(script: string): Segment[] {
     lastIndex = match.index + match[0].length;
   }
 
-  const remaining = script.slice(lastIndex);
+  const remaining = fullScript.slice(lastIndex);
   if (remaining.trim()) {
     segments.push({ text: remaining.trim(), condition: currentCondition });
   }
@@ -89,29 +53,27 @@ function parseScript(script: string): Segment[] {
   return segments;
 }
 
-function addEmotion(text: string, condition: string | null): string {
-  if (!condition) return text;
-  const mod = MODIFIERS[condition];
-  if (!mod) return text;
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
 
-  let t = text;
-  if (mod.casing === "upper") t = t.toUpperCase();
-  else if (mod.casing === "lower") t = t.toLowerCase();
+function buildSsml(segments: Segment[]): string {
+  const parts = segments.map((seg) => {
+    const p = CONDITION_PROSODY[seg.condition ?? ""] ?? DEFAULT;
+    const text = escapeXml(seg.text);
+    return `<prosody rate="${p.rate}" pitch="${p.pitch}" volume="${p.volume}">${text}</prosody>`;
+  });
 
-  // Add punctuation if missing
-  const last = t.trim().slice(-1);
-  if (!/[.!?…]/.test(last)) {
-    t = t.trim() + mod.punct;
-  } else if (mod.punct === "!" && last === ".") {
-    t = t.trim().slice(0, -1) + "!";
-  }
-
-  // Add pause markers
-  if (mod.pause) {
-    t = `... ${t.trim()} ...`;
-  }
-
-  return t;
+  return `<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="en-US">
+  <voice name="en-US-AvaNeural">
+    ${parts.join("\n    ")}
+  </voice>
+</speak>`;
 }
 
 export async function POST(req: NextRequest) {
@@ -126,108 +88,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { script, speakerAudio } = parsed.data;
-    const apiKey = process.env.REPLICATE_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: "REPLICATE_API_KEY not configured" }, { status: 500 });
-    }
-
-    // Parse and add emotional expression to each segment
+    const { script } = parsed.data;
     const segments = parseScript(script);
-    let fullText = segments
-      .map((seg) => addEmotion(seg.text, seg.condition))
-      .filter(Boolean)
-      .join(" ")
-      .trim()
-      .replace(/\s+\.\.\./g, "...")
-      .replace(/\.\.\.\s+/g, "... ");
 
-    if (!fullText) {
+    if (segments.length === 0) {
       return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
     }
 
-    // Upload the voice sample to Replicate storage
-    let speakerUrl: string;
-    try {
-      speakerUrl = await uploadAudioToReplicate(speakerAudio, apiKey);
-    } catch (err) {
-      console.error("[tts] Upload failed:", err);
-      return NextResponse.json({ error: "Voice sample upload failed" }, { status: 502 });
-    }
+    // Build a single SSML document with all segments
+    const ssml = buildSsml(segments);
 
-    // Start Replicate prediction
-    const predRes = await fetch(`${REPLICATE_API}/predictions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Token ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        version: "684bc3855b37866c0c65add2ff39c78f3dea3f4ff103a436465326e0f438d55e",
-        input: {
-          text: fullText,
-          speaker: speakerUrl,
-          language: "en",
-          cleanup_voice: true,
-        },
-      }),
+    // Synthesize in one request
+    const tts = new MsEdgeTTS();
+    await tts.setMetadata("en-US-AvaNeural", OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+
+    const { audioStream } = await tts.toStream(ssml);
+
+    const chunks: Buffer[] = [];
+    await new Promise<void>((resolve, reject) => {
+      audioStream.on("data", (d: Buffer) => chunks.push(d));
+      audioStream.on("close", () => resolve());
+      audioStream.on("error", (e: Error) => reject(e));
     });
 
-    if (!predRes.ok) {
-      const err = await predRes.text();
-      console.error("[tts] Prediction start failed:", err);
-      return NextResponse.json({ error: "Speech generation failed" }, { status: 502 });
+    if (chunks.length === 0) {
+      return NextResponse.json({ error: "No audio generated" }, { status: 422 });
     }
 
-    const prediction = await predRes.json();
-    const getUrl = prediction.urls?.get;
-    if (!getUrl) {
-      return NextResponse.json({ error: "No prediction URL returned" }, { status: 502 });
-    }
+    const fullAudio = Buffer.concat(chunks);
 
-    // Poll for completion (up to 2 minutes)
-    let outputUrl: string | null = null;
-    for (let i = 0; i < 40; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
-
-      const statusRes = await fetch(getUrl, {
-        headers: { Authorization: `Token ${apiKey}` },
-      });
-      if (!statusRes.ok) continue;
-
-      const status = await statusRes.json();
-
-      if (status.status === "succeeded") {
-        outputUrl = status.output;
-        break;
-      }
-
-      if (status.status === "failed") {
-        console.error("[tts] Prediction failed:", status.error);
-        return NextResponse.json({ error: "Speech generation failed" }, { status: 502 });
-      }
-    }
-
-    if (!outputUrl) {
-      return NextResponse.json({ error: "Speech generation timed out" }, { status: 504 });
-    }
-
-    // Handle output - might be a URL string or array of URLs
-    const audioUrl = Array.isArray(outputUrl) ? outputUrl[0] : outputUrl;
-
-    // Fetch the generated audio
-    const audioRes = await fetch(audioUrl);
-    if (!audioRes.ok) {
-      return NextResponse.json({ error: "Failed to fetch generated audio" }, { status: 502 });
-    }
-
-    const audioBuffer = await audioRes.arrayBuffer();
-
-    return new NextResponse(audioBuffer, {
+    return new NextResponse(fullAudio, {
       status: 200,
       headers: {
-        "Content-Type": "audio/wav",
-        "Content-Disposition": 'inline; filename="voxslides-output.wav"',
+        "Content-Type": "audio/mpeg",
+        "Content-Disposition": 'inline; filename="voxslides-output.mp3"',
       },
     });
   } catch (err) {
