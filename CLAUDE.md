@@ -216,6 +216,7 @@ Full details: Load the `practices` skill
 
 - **Commit message:** Present-tense imperative, lead with area: "worker: fix rate limit handling"
 - **Branch naming:** `feat/`, `fix/`, `chore/` prefixes
+- **Commit after each fix or feature:** once working and verified, commit immediately. Don't batch unrelated changes.
 - **Multi-AI sync:** Update CLAUDE.md, AGENTS.md, .cursorrules, .windsurfrules, GEMINI.md together
 - **Never commit:** `.env*` files, private keys, `/node_modules`, build artifacts, `/graphify-out`
 

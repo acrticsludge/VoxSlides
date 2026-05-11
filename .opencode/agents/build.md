@@ -15,6 +15,7 @@ Before any task, read `.opencode/AGENTS.md` fully.
 2. **Simplicity First** — minimum code, no speculative features
 3. **Surgical Changes** — touch only what the task requires
 4. **Goal-Driven Execution** — define verifiable success criteria before implementing
+5. **Commit After Each Fix or Feature** — once a fix or feature is working and verified, commit it immediately. Do not batch unrelated changes into one commit.
 
 ## Stack
 
