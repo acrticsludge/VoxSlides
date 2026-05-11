@@ -442,6 +442,21 @@ Don't show nothing. Show:
 - A clear explanation of why it's empty
 - A call to action to fill it ("Connect your first service →")
 
+### Workflow: Using Design Skills
+
+When building UI, follow this workflow:
+
+1. **Start with direction** — invoke a design skill (frontend-design skill or equivalent) to get a design direction: style, palette, font pairing tailored to the product type
+2. **Implement with intent** — translate the direction into code with correct Tailwind usage, accessible components, and intentional animation
+3. **Refine** — the skill gives you a foundation, not a finished product; iterate from there
+
+### Resources to Reference Before Designing
+
+- [Refactoring UI](https://www.refactoringtailwind.com/) — the book that the Tailwind authors wrote; most common UI mistakes and fixes
+- [Vercel's design system](https://vercel.com/design) — dark, high-contrast, developer-native aesthetic
+- [Linear's landing page](https://linear.app) — how to do sparse, high-quality developer product design
+- [Rauno's components](https://rauno.me) — micro-interactions done right
+
 ### Before Shipping Any New Page
 
 - [ ] Does each section have a clear visual hierarchy?

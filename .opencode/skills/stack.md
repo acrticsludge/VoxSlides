@@ -300,6 +300,24 @@ Rules:
 2. **Grace period on payment failure** — give 3–7 days before downgrading
 3. **Enforce in both API and worker** — UI shows upgrade prompts; backend enforces limits
 
+### Payments UI Patterns
+
+**Upgrade prompt (inline):**
+- Show when user hits a free tier limit — not a popup, an inline nudge
+- "You've used 1/1 integrations on the free plan. Upgrade to Pro for up to 5."
+- CTA: "Upgrade — $10/mo →"
+
+**Pricing page:**
+- Three tier cards; highlight the Pro tier (recommended)
+- Monthly/annual toggle with the annual saving shown: "Save $24/year"
+- Feature comparison list — check marks for included, dash or gray for not included
+- CTA buttons go to `/api/billing/checkout` with the tier in the request body
+
+**Success state:**
+- After checkout redirect, check `?upgraded=true` in the URL
+- Show a success toast or banner: "Welcome to Pro! Your new limits are active."
+- Don't rely solely on the webhook — optimistically show the upgrade confirmation, then verify on next page load
+
 ---
 
 ## Fumadocs (Docs Framework)

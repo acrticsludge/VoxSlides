@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Behavioral guidelines and project context for this codebase. Synthesized from me/ practices, me/ stack, and Karpathy principles.
+Behavioral guidelines and project context for this codebase. Synthesized from OpenCode skills (practices, stack, tools), audit checklists, and Karpathy principles.
 
 ---
 
@@ -79,7 +79,7 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 **Integrations:** Resend (email), Dodo Payments, Supabase Auth
 **Tooling:** graphify (knowledge graph), Biome/ESLint
 
-See `.opencode/skills/stack.md` for full details and rationale.
+Full details: Load the `stack` skill for full stack rationale, project structure, frontend libraries, and payments/docs setup.
 
 ### Project Structure
 
@@ -101,7 +101,7 @@ See `.opencode/skills/stack.md` for full details and rationale.
   tsconfig.json
 ```
 
-See `.opencode/skills/stack.md` for full folder layout.
+Full details: Load the `stack` skill for full folder layout.
 
 ### Tier Structure
 
@@ -126,7 +126,7 @@ Tier limits checked in both the API and the worker. The UI shows upgrade prompts
 - **Response envelope:** `{ data: T }` on success, `{ error: string }` on error
 - **Naming:** kebab-case routes, PascalCase types, camelCase variables, snake_case DB columns
 
-Full details: `.opencode/skills/practices.md`
+Full details: Load the `practices` skill
 
 ---
 
@@ -143,7 +143,7 @@ Full details: `.opencode/skills/practices.md`
 - **Never store raw card data** — delegate entirely to payment provider
 - **Rate-limit auth endpoints** — prevent brute force
 
-Full details: `.opencode/skills/practices.md`
+Full details: Load the `practices` skill
 
 ---
 
@@ -157,7 +157,7 @@ Full details: `.opencode/skills/practices.md`
 - **Correct status codes:** 200/201/204 for success; 400/401/403/404/422/429/500 for errors
 - **Sensitive fields excluded** from responses — never return encrypted keys, tokens, passwords
 
-Full details: `.opencode/skills/practices.md`
+Full details: Load the `practices` skill
 
 ---
 
@@ -170,7 +170,7 @@ Full details: `.opencode/skills/practices.md`
 - **Loading states on all async ops** — skeleton/spinner while fetching
 - **Error monitoring integrated** (Sentry, LogFlare, etc.) before launch
 
-Full details: `.opencode/skills/practices.md`
+Full details: Load the `practices` skill
 
 ---
 
@@ -184,7 +184,7 @@ Full details: `.opencode/skills/practices.md`
 - **Polling intervals:** Free 15min, Pro 5min, Team 1min
 - **Track alert state** to avoid spam — only re-alert on threshold crossing
 
-Full details: `.opencode/skills/practices.md`
+Full details: Load the `practices` skill
 
 ---
 
@@ -208,7 +208,7 @@ export const config = {
 
 Or use the negative regex pattern to exclude static files. Never ship without a matcher.
 
-Full details: `.opencode/skills/practices.md`
+Full details: Load the `practices` skill
 
 ---
 
@@ -254,7 +254,7 @@ When releasing `@llm-atlas/cli` to npm:
 cd cli && npm run lint && npm test && npm run build && npm pack --dry-run
 ```
 
-Full details: `.opencode/skills/practices.md`
+Full details: Load the `practices` skill
 
 ---
 
@@ -279,7 +279,7 @@ Avoid AI slop (gradient heroes, three identical cards, generic colors).
 
 Before shipping: hierarchy clear? One dominant action? Font pairing has contrast? Accent color sparse? Dark mode works? Mobile intentional? Shows actual product?
 
-Full details: `.opencode/skills/practices.md`
+Full details: Load the `practices` skill
 
 ---
 
@@ -302,7 +302,7 @@ Full details: `.opencode/skills/practices.md`
 
 Always add `/graphify-out` to `.gitignore`.
 
-Full details: `me/tools/graphify-workflow.md` and `me/tools/code-review-graph.md`
+Full details: Load the `tools` skill
 
 ### AI Collaboration
 
@@ -316,7 +316,7 @@ Keep all AI config files in sync:
 
 Stale docs are worse than no docs — the AI will confidently work from wrong information.
 
-Full details: `me/tools/ai-collaboration.md`
+Full details: Load the `tools` skill
 
 ---
 
@@ -326,13 +326,13 @@ Run the corresponding checklist **before** each event:
 
 | Trigger                | Checklist                                                                   |
 | ---------------------- | --------------------------------------------------------------------------- |
-| Pre-launch             | `me/audits/pre-launch-checklist.md`                                         |
-| API changes            | `me/audits/api-security-checklist.md` + `me/audits/api-design-checklist.md` |
-| UI/frontend changes    | `me/audits/performance-checklist.md` + `me/audits/mobile-checklist.md`      |
-| Billing/payments       | `me/audits/billing-checklist.md`                                            |
-| Error handling changes | `me/audits/error-handling-checklist.md`                                     |
-| Onboarding flow        | `me/audits/onboarding-ux-checklist.md`                                      |
-| SEO/content            | `me/audits/seo-checklist.md`                                                |
+| Pre-launch             | Load the `pre-launch-checklist` skill                                       |
+| API changes            | Load `api-security-checklist` + `api-design-checklist` skills               |
+| UI/frontend changes    | Load `performance-checklist` + `mobile-checklist` skills                    |
+| Billing/payments       | Load the `billing-checklist` skill                                          |
+| Error handling changes | Load the `error-handling-checklist` skill                                   |
+| Onboarding flow        | Load the `onboarding-ux-checklist` skill                                    |
+| SEO/content            | Load the `seo-checklist` skill                                              |
 
 Do not ship until Critical items are resolved.
 
@@ -350,7 +350,7 @@ Run `opencode run -m deepseek/deepseek-v4-pro` to use Pro on a task. See `.openc
 
 ## Project-Specific Notes
 
-- All canonical practices in `me/` folder at repo root
+- All canonical practices in `.opencode/skills/` — load the relevant skill for the task
 - OpenCode agents and skills in `.opencode/` — use for multi-step tasks
 - Graphify for architecture exploration and impact analysis
 - Run audits before every launch or major change

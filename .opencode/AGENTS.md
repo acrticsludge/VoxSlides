@@ -568,12 +568,12 @@ Run the corresponding checklist **before** each of these events:
 
 | Trigger | Checklist |
 |---------|-----------|
-| Pre-launch | `me/audits/pre-launch-checklist.md` |
-| API changes | `me/audits/api-security-checklist.md` + `me/audits/api-design-checklist.md` |
-| UI/frontend changes | `me/audits/performance-checklist.md` + `me/audits/mobile-checklist.md` |
-| Billing/payments | `me/audits/billing-checklist.md` |
-| Error handling changes | `me/audits/error-handling-checklist.md` |
-| Onboarding flow | `me/audits/onboarding-ux-checklist.md` |
-| SEO/content | `me/audits/seo-checklist.md` |
+| Pre-launch | Load the `pre-launch-checklist` skill |
+| API changes | Load `api-security-checklist` + `api-design-checklist` skills |
+| UI/frontend changes | Load `performance-checklist` + `mobile-checklist` skills |
+| Billing/payments | Load the `billing-checklist` skill |
+| Error handling changes | Load the `error-handling-checklist` skill |
+| Onboarding flow | Load the `onboarding-ux-checklist` skill |
+| SEO/content | Load the `seo-checklist` skill |
 
 Each checklist is organized into Critical, High, Medium, and Low/Info items. Do not ship until Critical items are resolved.
