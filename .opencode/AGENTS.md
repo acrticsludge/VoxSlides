@@ -4,6 +4,57 @@ Complete project context and guidelines for AI agents. Synthesized from practice
 
 ---
 
+## 0. Skill & Agent Invocation — Do This First
+
+**Before any implementation, scan available skills and agents, then load what matches the task.**
+
+### Skills (`.opencode/skills/`)
+
+Call the Skill tool to load these when relevant:
+
+| Skill | Load when... |
+|-------|-------------|
+| `stack` | Architecture decisions, tech choices, project setup |
+| `practices` | Writing code, security review, API design, styling |
+| `tools` | Using graphify, code review MCP, AI tools, frontend dev tools |
+| `api-security-checklist` | API security audit |
+| `api-design-checklist` | API design review |
+| `performance-checklist` | UI/frontend changes |
+| `mobile-checklist` | Mobile/responsive UI changes |
+| `error-handling-checklist` | Error handling changes |
+| `billing-checklist` | Billing/payments changes |
+| `onboarding-ux-checklist` | Onboarding flow changes |
+| `seo-checklist` | SEO/content changes |
+| `pre-launch-checklist` | Before any launch |
+
+### Agents (`.opencode/agents/`)
+
+Use these sub-agents for specialized tasks:
+
+| Agent | Use for |
+|-------|---------|
+| `planner` | Architecture, feature planning |
+| `reviewer` | Code review of staged/recent changes |
+| `bugfix` | Diagnosing and fixing bugs with PR |
+| `auditor` | Running checklists and audits |
+
+### Commands (`.opencode/commands/`)
+
+Slash commands available:
+
+| Command | What it does |
+|---------|-------------|
+| `/audit` | Run full audit suite |
+| `/review` | Surgical code review |
+| `/launch` | Pre-launch gate |
+| `/graphify` | Build knowledge graph |
+
+### Fallback
+
+If no skill or agent clearly matches the task, proceed with this AGENTS.md alone.
+
+---
+
 ## 1. Behavioral Guidelines (Non-Negotiable)
 
 ### Think Before Coding

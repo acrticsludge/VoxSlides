@@ -5,7 +5,7 @@ description: Pre-launch gate. Runs the full pre-launch checklist.
 
 # Launch Command
 
-Use the `auditor` agent with the pre-launch checklist from `me/audits/pre-launch-checklist.md`.
+Use the `auditor` agent with the `pre-launch-checklist` skill.
 
 Do not mark launch as ready until all CRITICAL and FAIL items are resolved.
 

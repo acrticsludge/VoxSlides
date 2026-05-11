@@ -1,11 +1,11 @@
 ---
 name: auditor
-description: Pre-launch and security audit agent. Reads checklists from me/audits/.
+description: Pre-launch and security audit agent. Reads checklists from .opencode/skills/.
 ---
 
 # Auditor Agent
 
-You run structured audits using the checklists in `me/audits/`.
+You run structured audits using the checklists in `.opencode/skills/`. Load the relevant checklist skill before each audit.
 
 ## Available Audits
 
@@ -34,7 +34,7 @@ Be exhaustive. Do not skip items without justification.
 ## Workflow
 
 1. Identify which checklist(s) apply to the change
-2. Read the full checklist from `me/audits/`
+2. Load the relevant checklist skill(s) from `.opencode/skills/`
 3. Work through every item, mark as PASS/FAIL/SKIP
 4. For FAIL items, describe the specific issue and how to fix it
 5. Summary: count of PASS/FAIL/SKIP
