@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 import { z } from "zod";
 
+// ngrok requires this header to bypass the interstitial page on server-to-server calls
+const NGROK_HEADERS = { "ngrok-skip-browser-warning": "1" };
+
 const RequestSchema = z.object({
   script: z.string().min(1, "Script is required").max(5000, "Script too long"),
   speakerAudio: z.string().optional(),
@@ -244,7 +247,10 @@ function getChatterboxBaseUrl(): string | null {
 
 async function chatterboxHealth(baseUrl: string): Promise<boolean> {
   try {
-    const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(5000) });
+    const res = await fetch(`${baseUrl}/health`, {
+      headers: NGROK_HEADERS,
+      signal: AbortSignal.timeout(5000),
+    });
     return res.ok;
   } catch {
     return false;
@@ -269,6 +275,7 @@ async function uploadToChatterbox(
 
   const res = await fetch(`${baseUrl}/upload_reference`, {
     method: "POST",
+    headers: NGROK_HEADERS,
     body: form,
   });
 
@@ -292,7 +299,7 @@ async function generateWithChatterbox(
 ): Promise<Buffer> {
   const res = await fetch(`${baseUrl}/tts`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...NGROK_HEADERS },
     body: JSON.stringify({
       text: options.text,
       voice_mode: "clone",
