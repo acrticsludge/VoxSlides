@@ -111,6 +111,10 @@ export default function Home() {
       toast.error("Type a script before generating.");
       return;
     }
+    if (!speakerAudio) {
+      toast.error("Upload or record a voice sample first.");
+      return;
+    }
 
     setGenerating(true);
     setAudioUrl(null);
@@ -121,6 +125,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           script: compiledScript,
+          speakerAudio,
         }),
       });
 
@@ -141,13 +146,13 @@ export default function Home() {
       };
       addToHistory(generation);
 
-      toast.success("Audio ready");
+      toast.success("Cloned voice audio ready");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setGenerating(false);
     }
-  }, [compiledScript, slots]);
+  }, [compiledScript, slots, speakerAudio]);
 
   const handleReplay = useCallback((gen: Generation) => {
     setCompiledScript(gen.script);
@@ -176,7 +181,7 @@ export default function Home() {
             {/* Voice Sample */}
             <div className="p-4 rounded-lg border border-border bg-card">
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Voice Sample</h3>
-              <p className="text-xs text-muted-foreground mb-3">Save a voice sample for premium voice cloning (coming soon). Free tier uses Microsoft Edge TTS.</p>
+              <p className="text-xs text-muted-foreground mb-3">Upload or record a 10-30 second audio clip for voice cloning via Chatterbox TTS.</p>
 
               {speakerAudio ? (
                 <div className="flex items-center justify-between gap-2 p-2 rounded bg-white/[0.03] border border-border">
@@ -224,8 +229,8 @@ export default function Home() {
         </div>
 
         <div className="mt-8 max-w-md mx-auto relative">
-          <ShimmerButton data-testid="generate-btn" onClick={handleGenerate} disabled={generating} className="w-full h-12 text-base font-semibold" background="#f5a623">
-            {generating ? "Generating with emotion..." : "Generate Speech"}
+          <ShimmerButton data-testid="generate-btn" onClick={handleGenerate} disabled={generating || !speakerAudio} className="w-full h-12 text-base font-semibold" background="#f5a623">
+            {generating ? "Cloning your voice..." : speakerAudio ? "Clone Voice & Generate" : "Upload a voice sample first"}
           </ShimmerButton>
           {generating && <BorderBeam />}
         </div>
