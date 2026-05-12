@@ -99,18 +99,6 @@ function getChatterboxBaseUrl(): string {
   return url;
 }
 
-async function chatterboxHealth(baseUrl: string): Promise<boolean> {
-  try {
-    const res = await fetch(`${baseUrl}/health`, {
-      headers: NGROK_HEADERS,
-      signal: AbortSignal.timeout(5000),
-    });
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
 async function uploadToChatterbox(
   audioBase64: string,
   baseUrl: string,
@@ -187,7 +175,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
     }
 
-    // Check Chatterbox is configured and reachable
+    // Check Chatterbox is configured
     let chatterboxUrl: string;
     try {
       chatterboxUrl = getChatterboxBaseUrl();
@@ -195,14 +183,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: "Chatterbox TTS not configured. Set CHATTERBOX_BASE_URL in .env.local" },
         { status: 500 }
-      );
-    }
-
-    const alive = await chatterboxHealth(chatterboxUrl);
-    if (!alive) {
-      return NextResponse.json(
-        { error: "Chatterbox TTS server is not reachable. Check your Colab runtime." },
-        { status: 502 }
       );
     }
 
