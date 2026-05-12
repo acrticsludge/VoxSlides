@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { execSync } from "child_process";
+import { writeFileSync, unlinkSync, mkdtempSync, readFileSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
+import ffmpeg from "ffmpeg-static";
 
 const NGROK_HEADERS = { "ngrok-skip-browser-warning": "1" };
 
@@ -99,19 +104,56 @@ function getChatterboxBaseUrl(): string {
   return url;
 }
 
+async function convertToWav(inputBuffer: Buffer, inputExt: string): Promise<Buffer> {
+  if (!ffmpeg) {
+    console.warn("[tts] ffmpeg not available, uploading as-is");
+    return inputBuffer;
+  }
+
+  const tmpDir = mkdtempSync(join(tmpdir(), "voxslides-"));
+  const inPath = join(tmpDir, `input.${inputExt}`);
+  const outPath = join(tmpDir, "output.wav");
+
+  try {
+    writeFileSync(inPath, inputBuffer);
+
+    execSync(
+      `"${ffmpeg}" -y -i "${inPath}" -acodec pcm_s16le -ar 44100 -ac 1 "${outPath}"`,
+      { stdio: "pipe", timeout: 30000 }
+    );
+
+    const wavBuffer = readFileSync(outPath);
+    console.log(`[tts] Converted ${inputExt} → wav (${inputBuffer.length} → ${wavBuffer.length} bytes)`);
+    return Buffer.from(wavBuffer.buffer, wavBuffer.byteOffset, wavBuffer.byteLength);
+  } finally {
+    try { unlinkSync(inPath) } catch {}
+    try { unlinkSync(outPath) } catch {}
+    try { unlinkSync(tmpDir) } catch {}
+  }
+}
+
 async function uploadToChatterbox(
   audioBase64: string,
-  baseUrl: string,
-  filename: string
-): Promise<void> {
+  baseUrl: string
+): Promise<string> {
   const raw = audioBase64.split(",").pop() ?? audioBase64;
-  const buffer = Buffer.from(raw, "base64");
+  let buffer: Buffer = Buffer.from(raw, "base64");
   const mime = audioBase64.startsWith("data:")
     ? audioBase64.split(",")[0].split(";")[0].split(":").pop() ?? "audio/wav"
     : "audio/wav";
 
+  // Determine input format
+  const inputExt = mime.includes("mp3") ? "mp3" : mime.includes("webm") ? "webm" : "wav";
+
+  // Convert non-WAV to WAV (Chatterbox expects WAV/MP3)
+  if (inputExt !== "wav") {
+    buffer = await convertToWav(buffer, inputExt);
+  }
+
+  const filename = "voxslides-speaker.wav";
+
   const form = new FormData();
-  form.append("files", new Blob([buffer], { type: mime }), filename);
+  form.append("files", new Blob([new Uint8Array(buffer)], { type: "audio/wav" }), filename);
 
   const res = await fetch(`${baseUrl}/upload_reference`, {
     method: "POST",
@@ -123,6 +165,11 @@ async function uploadToChatterbox(
     const text = await res.text();
     throw new Error(`Chatterbox upload failed (${res.status}): ${text}`);
   }
+
+  const responseBody = await res.text().catch(() => "");
+  console.log(`[tts] Uploaded ${filename} (${buffer.length} bytes): ${responseBody}`);
+
+  return filename;
 }
 
 async function generateWithChatterbox(
@@ -138,8 +185,11 @@ async function generateWithChatterbox(
       text,
       voice_mode: "clone",
       reference_audio_filename: referenceAudioFilename,
-      split_text: true,
+      split_text: false,  // keep as one chunk for consistent voice
       speed,
+      temperature: 0.3,   // lower = more accurate cloning
+      top_k: 30,
+      top_p: 0.85,
       language: "en",
       seed: Math.floor(Math.random() * 2147483647),
     }),
@@ -186,9 +236,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Upload reference audio
-    const filename = "voxslides-speaker.wav";
-    await uploadToChatterbox(speakerAudio, chatterboxUrl, filename);
+    // Upload reference audio (returns the filename with correct extension)
+    const filename = await uploadToChatterbox(speakerAudio, chatterboxUrl);
 
     // Build text with emotion modifiers
     const firstCondition = segments.find((s) => s.condition)?.condition ?? null;
