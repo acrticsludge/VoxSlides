@@ -7,13 +7,47 @@ const RequestSchema = z.object({
   speakerAudio: z.string().optional(),
 });
 
-// ── ElevenLabs voice helpers ──
+// ── Emotion text modifiers (punctuation & casing, no extra words) ──
 
-// Preset ElevenLabs voice (free tier compatible — high quality, expressive)
+const MODIFIERS: Record<
+  string,
+  { punct: string; casing: "upper" | "lower" | "normal" }
+> = {
+  excited:         { punct: "!", casing: "normal" },
+  whisper:         { punct: "...", casing: "lower" },
+  "slow and dramatic": { punct: "...", casing: "normal" },
+  fast:            { punct: "!", casing: "normal" },
+  nervous:         { punct: "...", casing: "normal" },
+  crying:          { punct: "...", casing: "lower" },
+  angry:           { punct: "!", casing: "upper" },
+  calm:            { punct: "...", casing: "lower" },
+  laughing:        { punct: "!", casing: "normal" },
+  sarcastic:       { punct: ".", casing: "normal" },
+  storytelling:    { punct: "...", casing: "normal" },
+  breathless:      { punct: "...", casing: "lower" },
+};
+
+// Condition → speed multiplier for Chatterbox (cloned voice + speed = emotion cue)
+const CONDITION_SPEED: Record<string, number> = {
+  excited:         1.15,
+  whisper:         0.7,
+  "slow and dramatic": 0.5,
+  fast:            1.6,
+  nervous:         1.2,
+  crying:          0.6,
+  angry:           1.25,
+  calm:            0.75,
+  laughing:        1.1,
+  sarcastic:       0.9,
+  storytelling:    0.85,
+  breathless:      1.4,
+};
+
+// ── ElevenLabs helpers (fallback when Chatterbox not available) ──
+
 const PRESET_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
 
 async function tryCloneVoice(audioBase64: string, apiKey: string): Promise<string | null> {
-  // Attempt instant voice clone (requires paid plan). Returns null if not permitted.
   try {
     const raw = audioBase64.split(",").pop() ?? audioBase64;
     const buffer = Buffer.from(raw, "base64");
@@ -33,7 +67,6 @@ async function tryCloneVoice(audioBase64: string, apiKey: string): Promise<strin
 
     if (!res.ok) {
       const text = await res.text();
-      // missing_permissions means free tier → use preset voice
       if (text.includes("missing_permissions") || text.includes("401")) {
         console.warn("[tts] Voice cloning not available on this plan, using preset voice");
         return null;
@@ -84,27 +117,6 @@ async function generateWithElevenLabs(
   const arrayBuffer = await res.arrayBuffer();
   return Buffer.from(arrayBuffer);
 }
-
-// ── Emotion text modifiers (for ElevenLabs cloned voice) ──
-// The cloned voice delivers emotion naturally; we nudge with punctuation & casing.
-
-const MODIFIERS: Record<
-  string,
-  { punct: string; casing: "upper" | "lower" | "normal" }
-> = {
-  excited:         { punct: "!", casing: "normal" },
-  whisper:         { punct: "...", casing: "lower" },
-  "slow and dramatic": { punct: "...", casing: "normal" },
-  fast:            { punct: "!", casing: "normal" },
-  nervous:         { punct: "...", casing: "normal" },
-  crying:          { punct: "...", casing: "lower" },
-  angry:           { punct: "!", casing: "upper" },
-  calm:            { punct: "...", casing: "lower" },
-  laughing:        { punct: "!", casing: "normal" },
-  sarcastic:       { punct: ".", casing: "normal" },
-  storytelling:    { punct: "...", casing: "normal" },
-  breathless:      { punct: "...", casing: "lower" },
-};
 
 // ── SSML prosody (for msedge-tts fallback) ──
 
@@ -211,7 +223,7 @@ async function synthesizeWithEdge(segments: Segment[]): Promise<Buffer> {
     OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3
   );
 
-    const { audioStream } = await tts.rawToStream(ssml);
+  const { audioStream } = await tts.rawToStream(ssml);
 
   const chunks: Buffer[] = [];
   await new Promise<void>((resolve, reject) => {
@@ -222,6 +234,83 @@ async function synthesizeWithEdge(segments: Segment[]): Promise<Buffer> {
 
   if (chunks.length === 0) throw new Error("No audio from msedge-tts");
   return Buffer.concat(chunks);
+}
+
+// ── Chatterbox TTS (local Colab) ──
+
+function getChatterboxBaseUrl(): string | null {
+  return process.env.CHATTERBOX_BASE_URL ?? null;
+}
+
+async function chatterboxHealth(baseUrl: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(5000) });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function uploadToChatterbox(
+  audioBase64: string,
+  baseUrl: string,
+  filename: string
+): Promise<void> {
+  const raw = audioBase64.split(",").pop() ?? audioBase64;
+  const buffer = Buffer.from(raw, "base64");
+  const mime = audioBase64.startsWith("data:")
+    ? audioBase64.split(",")[0].split(";")[0].split(":").pop() ?? "audio/wav"
+    : "audio/wav";
+
+  const form = new FormData();
+  const blob = new Blob([buffer], { type: mime });
+  const ext = mime.includes("mp3") ? "mp3" : "wav";
+  form.append("files", blob, filename ?? `voice.${ext}`);
+
+  const res = await fetch(`${baseUrl}/upload_reference`, {
+    method: "POST",
+    body: form,
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Chatterbox upload failed (${res.status}): ${text}`);
+  }
+}
+
+interface ChatterboxTtsOptions {
+  text: string;
+  referenceAudioFilename: string;
+  speed?: number;
+  seed?: number;
+  language?: string;
+}
+
+async function generateWithChatterbox(
+  options: ChatterboxTtsOptions,
+  baseUrl: string
+): Promise<Buffer> {
+  const res = await fetch(`${baseUrl}/tts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text: options.text,
+      voice_mode: "clone",
+      reference_audio_filename: options.referenceAudioFilename,
+      split_text: true,
+      speed: options.speed ?? 1.0,
+      seed: options.seed,
+      language: options.language ?? "en",
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Chatterbox TTS failed (${res.status}): ${text}`);
+  }
+
+  const arrayBuffer = await res.arrayBuffer();
+  return Buffer.from(arrayBuffer);
 }
 
 // ── Route ──
@@ -245,43 +334,97 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
     }
 
-    // ── Route: ElevenLabs premium TTS (uses voice cloning if available, otherwise preset voice) ──
+    // ── Primary: Chatterbox (local Colab) with voice cloning ──
     if (speakerAudio) {
-      const elKey = process.env.ELEVENLABS_API_KEY;
-      if (!elKey) {
-        console.warn("[tts] No ElevenLabs key, falling back to msedge-tts");
-      } else {
-        try {
-        // Try voice clone (paid plans) — falls back to preset voice (free tier)
-        const voiceId = (await tryCloneVoice(speakerAudio, elKey)) ?? PRESET_VOICE_ID;
+      const chatterboxUrl = getChatterboxBaseUrl();
+      if (chatterboxUrl) {
+        const alive = await chatterboxHealth(chatterboxUrl);
+        if (alive) {
+          try {
+            const filename = "voxslides-speaker.wav";
 
-        // Build plain text with emotion modifiers
-        const fullText = segments
-          .map((seg) => applyModifiers(seg.text, seg.condition))
-          .filter(Boolean)
-          .join(" ")
-          .trim()
-          .replace(/\s+\.\.\./g, "...")
-          .replace(/\.\.\.\s+/g, "... ");
+            // Upload the reference audio
+            await uploadToChatterbox(speakerAudio, chatterboxUrl, filename);
 
-        if (!fullText) {
-          return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
+            // Build text with emotion modifiers + speed per condition
+            // For simplicity, use average speed if multiple conditions, or the first
+            const firstCondition = segments.find((s) => s.condition)?.condition ?? null;
+            const speed = firstCondition
+              ? CONDITION_SPEED[firstCondition] ?? 1.0
+              : 1.0;
+
+            const fullText = segments
+              .map((seg) => applyModifiers(seg.text, seg.condition))
+              .filter(Boolean)
+              .join(" ")
+              .trim()
+              .replace(/\s+\.\.\./g, "...")
+              .replace(/\.\.\.\s+/g, "... ");
+
+            if (!fullText) {
+              return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
+            }
+
+            const audio = await generateWithChatterbox(
+              {
+                text: fullText,
+                referenceAudioFilename: filename,
+                speed,
+                seed: Math.floor(Math.random() * 2147483647),
+              },
+              chatterboxUrl
+            );
+
+            return new NextResponse(new Uint8Array(audio), {
+              status: 200,
+              headers: {
+                "Content-Type": "audio/wav",
+                "Content-Disposition": 'inline; filename="voxslides-output.wav"',
+              },
+            });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : "";
+            console.warn("[tts] Chatterbox error, trying ElevenLabs:", msg);
+          }
+        } else {
+          console.warn("[tts] Chatterbox not reachable, trying ElevenLabs");
         }
-
-        const audio = await generateWithElevenLabs(fullText, voiceId, elKey);
-
-        return new NextResponse(new Uint8Array(audio), {
-          status: 200,
-          headers: {
-            "Content-Type": "audio/mpeg",
-            "Content-Disposition": 'inline; filename="voxslides-output.mp3"',
-          },
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : "";
-        console.warn("[tts] ElevenLabs error, falling back to msedge-tts:", msg);
       }
-      } // closes else
+
+      // ── Secondary: ElevenLabs (if Chatterbox unavailable or not configured) ──
+      const elKey = process.env.ELEVENLABS_API_KEY;
+      if (elKey) {
+        try {
+          const voiceId = (await tryCloneVoice(speakerAudio, elKey)) ?? PRESET_VOICE_ID;
+
+          const fullText = segments
+            .map((seg) => applyModifiers(seg.text, seg.condition))
+            .filter(Boolean)
+            .join(" ")
+            .trim()
+            .replace(/\s+\.\.\./g, "...")
+            .replace(/\.\.\.\s+/g, "... ");
+
+          if (!fullText) {
+            return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
+          }
+
+          const audio = await generateWithElevenLabs(fullText, voiceId, elKey);
+
+          return new NextResponse(new Uint8Array(audio), {
+            status: 200,
+            headers: {
+              "Content-Type": "audio/mpeg",
+              "Content-Disposition": 'inline; filename="voxslides-output.mp3"',
+            },
+          });
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : "";
+          console.warn("[tts] ElevenLabs error, falling back to msedge-tts:", msg);
+        }
+      } else {
+        console.warn("[tts] No ElevenLabs key, falling back to msedge-tts");
+      }
     }
 
     // ── Fallback: msedge-tts (free, no voice cloning, SSML emotion) ──
