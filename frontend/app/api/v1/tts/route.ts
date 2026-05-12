@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { execSync } from "child_process";
-import { writeFileSync, unlinkSync, mkdtempSync, readFileSync } from "fs";
+import { writeFileSync, unlinkSync, mkdtempSync, readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import ffmpeg from "ffmpeg-static";
+import { resolve } from "path";
+// ffmpeg-static path gets mangled by Turbopack, resolve manually
+const FFMPEG_PATH = (() => {
+  try {
+    // Try direct import first
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const p = require("ffmpeg-static") as string;
+    if (p && p.length > 5) return p;
+  } catch {
+    // fallback: hardcoded path relative to project
+  }
+  return resolve(process.cwd(), "node_modules/ffmpeg-static/ffmpeg.exe");
+})();
+console.log("[tts] ffmpeg path:", FFMPEG_PATH);
 
 const NGROK_HEADERS = { "ngrok-skip-browser-warning": "1" };
 
@@ -105,8 +118,8 @@ function getChatterboxBaseUrl(): string {
 }
 
 async function convertToWav(inputBuffer: Buffer, inputExt: string): Promise<Buffer> {
-  if (!ffmpeg) {
-    console.warn("[tts] ffmpeg not available, uploading as-is");
+  if (!existsSync(FFMPEG_PATH)) {
+    console.warn("[tts] ffmpeg not found at", FFMPEG_PATH, "- uploading as-is");
     return inputBuffer;
   }
 
@@ -118,7 +131,7 @@ async function convertToWav(inputBuffer: Buffer, inputExt: string): Promise<Buff
     writeFileSync(inPath, inputBuffer);
 
     execSync(
-      `"${ffmpeg}" -y -i "${inPath}" -acodec pcm_s16le -ar 44100 -ac 1 "${outPath}"`,
+      `"${FFMPEG_PATH}" -y -i "${inPath}" -acodec pcm_s16le -ar 44100 -ac 1 "${outPath}"`,
       { stdio: "pipe", timeout: 30000 }
     );
 
