@@ -1,5 +1,3 @@
-import { Client, FileData } from "@gradio/client";
-
 export interface FishSpeechParams {
   /** The text to synthesize */
   text: string;
@@ -57,97 +55,125 @@ export function getFishSpeechBaseUrl(): string {
 }
 
 /**
- * Decode a base64 data URL into raw bytes.
- * Returns { buffer, mimeType }.
- */
-function decodeBase64Audio(dataUrl: string): { buffer: Buffer; mimeType: string } {
-  const [header, raw] = dataUrl.includes(",")
-    ? dataUrl.split(",", 2)
-    : ["audio/wav", dataUrl];
-
-  const mimeType = header.replace(/^data:/, "").split(";")[0].trim() || "audio/wav";
-  return { buffer: Buffer.from(raw, "base64"), mimeType };
-}
-
-/**
- * Call FishSpeech S2 Pro via Gradio `/partial` endpoint.
+ * Call FishSpeech S2 Pro via raw Gradio HTTP API.
  *
- * No fallback providers — if FishSpeech fails, the error is thrown and
- * the caller should surface it to the user.
+ * We bypass the @gradio/client because its internal blob-serialization
+ * pipeline doesn't reliably pass file references to the server in Node.js.
+ * Instead we:
+ *   1. Upload the audio file to the Gradio server's /upload endpoint
+ *   2. Call the /api/partial/ endpoint directly with the server-side file path
  */
 export async function synthesizeSpeech(
   params: FishSpeechParams
 ): Promise<FishSpeechResult> {
   const baseUrl = getFishSpeechBaseUrl();
-  const { buffer: audioBuffer, mimeType } = decodeBase64Audio(params.referenceAudioBase64);
+  const {
+    text,
+    referenceAudioBase64,
+    referenceId = FISHSPEECH_DEFAULTS.referenceId,
+    referenceText = FISHSPEECH_DEFAULTS.referenceText,
+    maxNewTokens = FISHSPEECH_DEFAULTS.maxNewTokens,
+    chunkLength = FISHSPEECH_DEFAULTS.chunkLength,
+    topP = FISHSPEECH_DEFAULTS.topP,
+    repetitionPenalty = FISHSPEECH_DEFAULTS.repetitionPenalty,
+    temperature = FISHSPEECH_DEFAULTS.temperature,
+    seed = FISHSPEECH_DEFAULTS.seed,
+    useMemoryCache = FISHSPEECH_DEFAULTS.useMemoryCache,
+  } = params;
 
-  const client = await Client.connect(baseUrl);
+  // --- Step 1: Decode base64 audio to bytes ---
+  const raw = referenceAudioBase64.includes(",")
+    ? referenceAudioBase64.split(",", 2)[1]
+    : referenceAudioBase64;
 
-  try {
-    // Step 1: Upload reference audio explicitly (Gradio client's internal
-    // blob-upload during predict() can fail silently in Node.js).
-    const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
-    const uploadRes = await client.upload_files(baseUrl, [audioBlob]);
+  const audioBytes = Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
 
-    if (!uploadRes.files?.length) {
-      throw new Error(uploadRes.error ?? "Reference audio upload returned no files");
-    }
+  // --- Step 2: Upload reference audio to Gradio server ---
+  const formData = new FormData();
+  formData.append("files", new Blob([audioBytes], { type: "audio/wav" }), "reference.wav");
 
-    // Step 2: Create a FileData pointing to the uploaded file on the server.
-    // Passing a FileData (not a Blob) to predict() means the client won't
-    // attempt another upload — it passes the path through directly.
-    const refFile = new FileData({
-      path: uploadRes.files[0],
-      orig_name: "reference.wav",
-      mime_type: mimeType,
-    });
+  const uploadRes = await fetch(`${baseUrl}/upload`, {
+    method: "POST",
+    body: formData,
+  });
 
-    // Step 3: Run inference with the uploaded reference
-    const result = await client.predict<unknown[]>("/partial", {
-      text: params.text,
-      reference_id: params.referenceId ?? FISHSPEECH_DEFAULTS.referenceId,
-      reference_audio: refFile,
-      reference_text: params.referenceText ?? FISHSPEECH_DEFAULTS.referenceText,
-      max_new_tokens: params.maxNewTokens ?? FISHSPEECH_DEFAULTS.maxNewTokens,
-      chunk_length: params.chunkLength ?? FISHSPEECH_DEFAULTS.chunkLength,
-      top_p: params.topP ?? FISHSPEECH_DEFAULTS.topP,
-      repetition_penalty:
-        params.repetitionPenalty ?? FISHSPEECH_DEFAULTS.repetitionPenalty,
-      temperature: params.temperature ?? FISHSPEECH_DEFAULTS.temperature,
-      seed: params.seed ?? FISHSPEECH_DEFAULTS.seed,
-      use_memory_cache: params.useMemoryCache ?? FISHSPEECH_DEFAULTS.useMemoryCache,
-    });
-
-    // FishSpeech returns [audio: FileData, error: string]
-    const errorMsg = result.data[1] as string | undefined;
-    if (errorMsg && errorMsg.trim() && errorMsg !== "<br>" && errorMsg !== "null") {
-      const clean = errorMsg.replace(/<[^>]*>/g, "").trim();
-      throw new Error(clean || "FishSpeech inference failed");
-    }
-
-    const audioFile = result.data[0] as FileData | undefined;
-    if (!audioFile) {
-      throw new Error("No audio data returned from FishSpeech");
-    }
-
-    // Prefer base64-encoded data (most efficient)
-    if (audioFile.b64) {
-      return { audioBuffer: Buffer.from(audioFile.b64, "base64") };
-    }
-
-    // Fallback: download from the server URL
-    if (audioFile.url) {
-      const response = await fetch(audioFile.url);
-      if (!response.ok) {
-        throw new Error(
-          `Failed to download generated audio (${response.status})`
-        );
-      }
-      return { audioBuffer: Buffer.from(await response.arrayBuffer()) };
-    }
-
-    throw new Error("Cannot read audio output from FishSpeech response");
-  } finally {
-    client.close();
+  if (!uploadRes.ok) {
+    const errText = await uploadRes.text().catch(() => "");
+    throw new Error(`Audio upload failed (${uploadRes.status}): ${errText}`);
   }
+
+  const uploadBody: string[] = await uploadRes.json();
+  const serverPath = uploadBody[0];
+  if (!serverPath) {
+    throw new Error("Audio upload returned empty file list");
+  }
+
+  // --- Step 3: Call the Gradio API function ---
+  // The /partial endpoint accepts 11 parameters. The reference_audio
+  // (index 2) is passed as a FileData dict with the server-side path.
+  const payload = {
+    data: [
+      text,
+      referenceId,
+      {
+        path: serverPath,
+        meta: { _type: "gradio.FileData" },
+      },
+      referenceText,
+      maxNewTokens,
+      chunkLength,
+      topP,
+      repetitionPenalty,
+      temperature,
+      seed,
+      useMemoryCache,
+    ],
+  };
+
+  const apiRes = await fetch(`${baseUrl}/api/partial/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!apiRes.ok) {
+    const errText = await apiRes.text().catch(() => "");
+    throw new Error(`FishSpeech API error (${apiRes.status}): ${errText}`);
+  }
+
+  const apiBody = await apiRes.json();
+
+  // --- Step 4: Parse response ---
+  // Response shape: { data: [audio_data, error_html], ... }
+  const errorHtml = apiBody.data?.[1];
+  if (errorHtml && typeof errorHtml === "string" && errorHtml.trim() && errorHtml !== "<br>" && errorHtml !== "null") {
+    const clean = errorHtml.replace(/<[^>]*>/g, "").trim();
+    throw new Error(clean || "FishSpeech inference failed");
+  }
+
+  const audioOutput = apiBody.data?.[0];
+  if (!audioOutput) {
+    throw new Error("No audio data returned from FishSpeech");
+  }
+
+  // Audio output can be:
+  //   { url: "http://..." }   — download from URL
+  //   { path: "/tmp/..." }    — read from server path (download via /file=...)
+  //   { b64: "base64..." }    — base64 encoded
+  //   [sample_rate, floats]   — raw audio array (unlikely via /api endpoint)
+
+  if (audioOutput.b64) {
+    return { audioBuffer: Buffer.from(audioOutput.b64, "base64") };
+  }
+
+  const audioUrl = audioOutput.url ?? (audioOutput.path ? `${baseUrl}/file=${audioOutput.path}` : null);
+  if (audioUrl) {
+    const dlRes = await fetch(audioUrl);
+    if (!dlRes.ok) {
+      throw new Error(`Failed to download generated audio (${dlRes.status})`);
+    }
+    return { audioBuffer: Buffer.from(await dlRes.arrayBuffer()) };
+  }
+
+  throw new Error("Cannot read audio output from FishSpeech response");
 }
