@@ -55,19 +55,10 @@ export function getFishSpeechBaseUrl(): string {
 }
 
 /**
- * Convert a base64 data URL to a data: URI for inline Gradio file input.
- * The `data` field in FileData accepts "data:{mime};name={name};base64,{raw}".
+ * Extract the raw base64 from a data URL (strip the "data:...;base64," prefix).
  */
-function asDataUri(dataUrl: string): string {
-  if (dataUrl.startsWith("data:")) {
-    // Already a data URL — ensure it has a name segment
-    if (!dataUrl.includes(";name=")) {
-      return dataUrl.replace(";base64,", ";name=reference.wav;base64,");
-    }
-    return dataUrl;
-  }
-  // Raw base64 — wrap in data URI
-  return `data:audio/wav;name=reference.wav;base64,${dataUrl}`;
+function stripDataUrlPrefix(dataUrl: string): string {
+  return dataUrl.includes(",") ? dataUrl.split(",", 2)[1] : dataUrl;
 }
 
 /**
@@ -150,16 +141,19 @@ export async function synthesizeSpeech(
     useMemoryCache = FISHSPEECH_DEFAULTS.useMemoryCache,
   } = params;
 
-  // Build the reference audio as a FileData with inline data URI.
-  // This avoids needing the /upload endpoint entirely.
-  const refAudioDataUri = asDataUri(referenceAudioBase64);
+  // Build the reference audio as a FileData with inline base64.
+  // The Gradio FileData model accepts a `b64` field for raw base64 payloads,
+  // avoiding the need for the /upload endpoint.
+  const rawB64 = stripDataUrlPrefix(referenceAudioBase64);
 
   const payload = {
     data: [
       text,
       referenceId,
       {
-        data: refAudioDataUri,
+        b64: rawB64,
+        orig_name: "reference.wav",
+        mime_type: "audio/wav",
         meta: { _type: "gradio.FileData" },
       },
       referenceText,
