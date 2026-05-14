@@ -111,6 +111,10 @@ export default function Home() {
       toast.error("Type a script before generating.");
       return;
     }
+    if (!speakerAudio) {
+      toast.error("Upload or record a voice sample first.");
+      return;
+    }
 
     setGenerating(true);
     setAudioUrl(null);
@@ -121,6 +125,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           script: compiledScript,
+          speakerAudio,
         }),
       });
 
@@ -147,7 +152,7 @@ export default function Home() {
     } finally {
       setGenerating(false);
     }
-  }, [compiledScript, slots]);
+  }, [compiledScript, slots, speakerAudio]);
 
   const handleReplay = useCallback((gen: Generation) => {
     setCompiledScript(gen.script);
@@ -224,8 +229,8 @@ export default function Home() {
         </div>
 
         <div className="mt-8 max-w-md mx-auto relative">
-          <ShimmerButton data-testid="generate-btn" onClick={handleGenerate} disabled={generating} className="w-full h-12 text-base font-semibold" background="#f5a623">
-            {generating ? "FishSpeech generating..." : "Generate with FishSpeech"}
+          <ShimmerButton data-testid="generate-btn" onClick={handleGenerate} disabled={generating || !speakerAudio} className="w-full h-12 text-base font-semibold" background="#f5a623">
+            {generating ? "FishSpeech generating..." : speakerAudio ? "Generate with FishSpeech" : "Upload a voice sample first"}
           </ShimmerButton>
           {generating && <BorderBeam />}
         </div>
