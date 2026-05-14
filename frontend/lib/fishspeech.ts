@@ -31,7 +31,7 @@ export interface FishSpeechResult {
 }
 
 export const FISHSPEECH_DEFAULTS = {
-  referenceId: "voxslides_speaker",
+  referenceId: "",
   referenceText: "",
   maxNewTokens: 0,
   chunkLength: 300,
@@ -39,60 +39,92 @@ export const FISHSPEECH_DEFAULTS = {
   repetitionPenalty: 1.1,
   temperature: 0.8,
   seed: 0,
-  useMemoryCache: "on" as const,
+  useMemoryCache: "off" as const,
 };
 
 /**
- * Parse SSE stream from the Gradio API and return the final output data.
+ * Collect the final output from a Gradio SSE or newline-delimited JSON stream.
+ *
+ * The streaming endpoint can return data in two formats:
+ *   1. SSE:  event: complete\ndata: {...}\n\n
+ *   2. NDJSON: {"type":"complete","output":{"data":[...]}}\n
+ *
+ * We handle both by reading all lines and looking for a "complete" event.
  */
 async function collectSseResult(
   response: Response
 ): Promise<{ data: unknown[] }> {
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("Response body is not readable");
+  const text = await response.text();
+  const lines = text.split(/\r?\n/);
 
-  const decoder = new TextDecoder();
-  let buffer = "";
+  let currentEventType = "";
+  let currentDataLine = "";
 
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
 
-      buffer += decoder.decode(value, { stream: true });
-
-      // SSE events are separated by double newlines
-      const blocks = buffer.split("\n\n");
-      // Keep the last incomplete block in the buffer
-      buffer = blocks.pop() ?? "";
-
-      for (const block of blocks) {
-        const lines = block.split("\n");
-        let eventType = "";
-        let dataLine = "";
-
-        for (const line of lines) {
-          if (line.startsWith("event: ")) {
-            eventType = line.slice(7).trim();
-          } else if (line.startsWith("data: ")) {
-            dataLine = line.slice(6);
-          }
+    // Try parsing as a standalone JSON line (NDJSON format)
+    if (trimmed.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (parsed?.type === "complete" && parsed?.output?.data) {
+          return { data: parsed.output.data };
         }
+        // For SSE-like structures embedded in JSON
+        if (parsed?.output?.data) {
+          return { data: parsed.output.data };
+        }
+      } catch {
+        // Not JSON — continue to SSE parsing
+      }
+    }
 
-        if (eventType === "complete" && dataLine) {
-          const parsed = JSON.parse(dataLine);
+    // SSE format: "event: <type>" and "data: <json>"
+    if (trimmed.startsWith("event: ")) {
+      currentEventType = trimmed.slice(7).trim();
+    } else if (trimmed.startsWith("data: ")) {
+      currentDataLine = trimmed.slice(6);
+      if (currentEventType === "complete" && currentDataLine) {
+        try {
+          const parsed = JSON.parse(currentDataLine);
           const output = parsed?.output;
           if (output?.data) {
             return { data: output.data };
           }
+        } catch {
+          // malformed JSON, continue
         }
       }
     }
-  } finally {
-    reader.releaseLock();
   }
 
-  throw new Error("FishSpeech did not return a complete result");
+  // Fallback: look for any line containing the output data
+  for (const line of lines) {
+    try {
+      const parsed = JSON.parse(line.trim());
+      if (parsed?.output?.data) {
+        return { data: parsed.output.data };
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  // Last resort: check if the raw text is itself a JSON response
+  try {
+    const parsed = JSON.parse(text.trim());
+    const data = parsed?.data ?? parsed?.output?.data;
+    if (data) {
+      return { data: data as unknown[] };
+    }
+  } catch {
+    // not JSON
+  }
+
+  throw new Error(
+    `FishSpeech did not return a complete result. Raw response (first 500 chars): ${text.slice(0, 500)}`
+  );
 }
 
 export function getFishSpeechBaseUrl(): string {
