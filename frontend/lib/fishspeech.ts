@@ -65,13 +65,15 @@ async function collectSseResult(
     if (!trimmed) continue;
 
     // Try parsing as a standalone JSON line (NDJSON format)
-    if (trimmed.startsWith("{")) {
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
       try {
         const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return { data: parsed };
+        }
         if (parsed?.type === "complete" && parsed?.output?.data) {
           return { data: parsed.output.data };
         }
-        // For SSE-like structures embedded in JSON
         if (parsed?.output?.data) {
           return { data: parsed.output.data };
         }
@@ -87,7 +89,13 @@ async function collectSseResult(
       currentDataLine = trimmed.slice(6);
       if (currentEventType === "complete" && currentDataLine) {
         try {
+          // The data is the raw output array: [audio_file_data, error_html]
+          // NOT wrapped in {"output": {"data": [...]}}
           const parsed = JSON.parse(currentDataLine);
+          if (Array.isArray(parsed)) {
+            return { data: parsed };
+          }
+          // Fallback: check for wrapped format
           const output = parsed?.output;
           if (output?.data) {
             return { data: output.data };
@@ -99,10 +107,15 @@ async function collectSseResult(
     }
   }
 
-  // Fallback: look for any line containing the output data
+  // Fallback: look for any line containing a data array
   for (const line of lines) {
+    const trimmed2 = line.trim();
+    if (!trimmed2) continue;
     try {
-      const parsed = JSON.parse(line.trim());
+      const parsed = JSON.parse(trimmed2);
+      if (Array.isArray(parsed)) {
+        return { data: parsed };
+      }
       if (parsed?.output?.data) {
         return { data: parsed.output.data };
       }
@@ -111,9 +124,12 @@ async function collectSseResult(
     }
   }
 
-  // Last resort: check if the raw text is itself a JSON response
+  // Last resort: check if the raw text is itself a JSON array or object
   try {
     const parsed = JSON.parse(text.trim());
+    if (Array.isArray(parsed)) {
+      return { data: parsed };
+    }
     const data = parsed?.data ?? parsed?.output?.data;
     if (data) {
       return { data: data as unknown[] };
