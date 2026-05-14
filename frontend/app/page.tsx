@@ -9,8 +9,10 @@ import { PRESET_CONDITIONS } from "@/lib/conditions";
 import toast, { Toaster } from "react-hot-toast";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { BorderBeam } from "@/components/ui/border-beam";
-import { Upload, Trash2 } from "lucide-react";
+import { Upload, Trash2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import { VoiceRecorder } from "@/components/voice-recorder/VoiceRecorder";
 
 const CONDITION_COLORS: Record<string, string> = {
@@ -78,6 +80,13 @@ export default function Home() {
   const [speakerFileName, setSpeakerFileName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // FishSpeech tuning params
+  const [referenceText, setReferenceText] = useState("");
+  const [temperature, setTemperature] = useState(0.8);
+  const [repetitionPenalty, setRepetitionPenalty] = useState(1.1);
+  const [topP, setTopP] = useState(0.8);
+  const [chunkLength, setChunkLength] = useState(300);
+
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -126,6 +135,11 @@ export default function Home() {
         body: JSON.stringify({
           script: compiledScript,
           speakerAudio,
+          referenceText: referenceText || undefined,
+          temperature,
+          repetitionPenalty,
+          topP,
+          chunkLength,
         }),
       });
 
@@ -152,7 +166,7 @@ export default function Home() {
     } finally {
       setGenerating(false);
     }
-  }, [compiledScript, slots, speakerAudio]);
+  }, [compiledScript, slots, speakerAudio, referenceText, temperature, repetitionPenalty, topP, chunkLength]);
 
   const handleReplay = useCallback((gen: Generation) => {
     setCompiledScript(gen.script);
@@ -217,6 +231,57 @@ export default function Home() {
                     <span className="text-xs text-muted-foreground/50 ml-auto">[{preset.value}]</span>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Voice Tuning */}
+            <div className="p-4 rounded-lg border border-border bg-card">
+              <div className="flex items-center gap-2 mb-3">
+                <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Voice Tuning</h3>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1">Reference Text</label>
+                  <Input
+                    placeholder="Transcribe your reference audio (improves cloning)"
+                    value={referenceText}
+                    onChange={(e) => setReferenceText(e.target.value)}
+                    className="text-xs"
+                  />
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>Temperature</span>
+                    <span>{temperature.toFixed(1)}</span>
+                  </div>
+                  <Slider value={[temperature]} min={0.1} max={2} step={0.1}
+                    onValueChange={(v) => setTemperature(Array.isArray(v) ? v[0] : v)} />
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>Repetition Penalty</span>
+                    <span>{repetitionPenalty.toFixed(1)}</span>
+                  </div>
+                  <Slider value={[repetitionPenalty]} min={0.1} max={5} step={0.1}
+                    onValueChange={(v) => setRepetitionPenalty(Array.isArray(v) ? v[0] : v)} />
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>Top-P</span>
+                    <span>{topP.toFixed(2)}</span>
+                  </div>
+                  <Slider value={[topP]} min={0} max={1} step={0.05}
+                    onValueChange={(v) => setTopP(Array.isArray(v) ? v[0] : v)} />
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                    <span>Chunk Length (0 = off)</span>
+                    <span>{chunkLength}</span>
+                  </div>
+                  <Slider value={[chunkLength]} min={0} max={1000} step={50}
+                    onValueChange={(v) => setChunkLength(Array.isArray(v) ? v[0] : v)} />
+                </div>
               </div>
             </div>
 
