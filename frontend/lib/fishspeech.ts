@@ -57,21 +57,16 @@ export function getFishSpeechBaseUrl(): string {
 }
 
 /**
- * Convert a base64 data URL (e.g. "data:audio/wav;base64,...") into a Blob
- * suitable for upload to the Gradio server.
+ * Decode a base64 data URL into raw bytes.
+ * Returns { buffer, mimeType }.
  */
-function base64ToBlob(dataUrl: string): Blob {
+function decodeBase64Audio(dataUrl: string): { buffer: Buffer; mimeType: string } {
   const [header, raw] = dataUrl.includes(",")
     ? dataUrl.split(",", 2)
     : ["audio/wav", dataUrl];
 
-  const mime = header.replace(/^data:/, "").split(";")[0].trim() || "audio/wav";
-  const binaryStr = atob(raw);
-  const bytes = new Uint8Array(binaryStr.length);
-  for (let i = 0; i < binaryStr.length; i++) {
-    bytes[i] = binaryStr.charCodeAt(i);
-  }
-  return new Blob([bytes], { type: mime });
+  const mimeType = header.replace(/^data:/, "").split(";")[0].trim() || "audio/wav";
+  return { buffer: Buffer.from(raw, "base64"), mimeType };
 }
 
 /**
@@ -84,17 +79,34 @@ export async function synthesizeSpeech(
   params: FishSpeechParams
 ): Promise<FishSpeechResult> {
   const baseUrl = getFishSpeechBaseUrl();
-
-  // Convert reference audio to a Blob for Gradio upload
-  const audioBlob = base64ToBlob(params.referenceAudioBase64);
+  const { buffer: audioBuffer, mimeType } = decodeBase64Audio(params.referenceAudioBase64);
 
   const client = await Client.connect(baseUrl);
 
   try {
+    // Step 1: Upload reference audio explicitly (Gradio client's internal
+    // blob-upload during predict() can fail silently in Node.js).
+    const audioBlob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
+    const uploadRes = await client.upload_files(baseUrl, [audioBlob]);
+
+    if (!uploadRes.files?.length) {
+      throw new Error(uploadRes.error ?? "Reference audio upload returned no files");
+    }
+
+    // Step 2: Create a FileData pointing to the uploaded file on the server.
+    // Passing a FileData (not a Blob) to predict() means the client won't
+    // attempt another upload — it passes the path through directly.
+    const refFile = new FileData({
+      path: uploadRes.files[0],
+      orig_name: "reference.wav",
+      mime_type: mimeType,
+    });
+
+    // Step 3: Run inference with the uploaded reference
     const result = await client.predict<unknown[]>("/partial", {
       text: params.text,
       reference_id: params.referenceId ?? FISHSPEECH_DEFAULTS.referenceId,
-      reference_audio: audioBlob,
+      reference_audio: refFile,
       reference_text: params.referenceText ?? FISHSPEECH_DEFAULTS.referenceText,
       max_new_tokens: params.maxNewTokens ?? FISHSPEECH_DEFAULTS.maxNewTokens,
       chunk_length: params.chunkLength ?? FISHSPEECH_DEFAULTS.chunkLength,
@@ -106,10 +118,9 @@ export async function synthesizeSpeech(
       use_memory_cache: params.useMemoryCache ?? FISHSPEECH_DEFAULTS.useMemoryCache,
     });
 
-    // Fishery returns [audio: FileData, error: string]
+    // FishSpeech returns [audio: FileData, error: string]
     const errorMsg = result.data[1] as string | undefined;
     if (errorMsg && errorMsg.trim() && errorMsg !== "<br>" && errorMsg !== "null") {
-      // Strip any HTML tags for a clean message
       const clean = errorMsg.replace(/<[^>]*>/g, "").trim();
       throw new Error(clean || "FishSpeech inference failed");
     }
