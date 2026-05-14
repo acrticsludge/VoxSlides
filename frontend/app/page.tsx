@@ -235,52 +235,60 @@ export default function Home() {
             </div>
 
             {/* Voice Tuning */}
-            <div className="p-4 rounded-lg border border-border bg-card">
-              <div className="flex items-center gap-2 mb-3">
-                <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
+            <div className="p-5 rounded-lg border border-border bg-card">
+              <div className="flex items-center gap-2 mb-4">
+                <Settings2 className="h-4 w-4 text-muted-foreground" />
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Voice Tuning</h3>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Reference Text</label>
+                  <label className="text-xs text-muted-foreground block mb-1.5">Reference Text</label>
                   <Input
                     placeholder="Transcribe your reference audio (improves cloning)"
                     value={referenceText}
                     onChange={(e) => setReferenceText(e.target.value)}
-                    className="text-xs"
+                    className="text-xs h-9"
                   />
                 </div>
-                <div>
-                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                <div className="pt-0.5">
+                  <div className="flex justify-between text-xs text-muted-foreground mb-2">
                     <span>Temperature</span>
-                    <span>{temperature.toFixed(1)}</span>
+                    <span className="font-mono tabular-nums">{temperature.toFixed(1)}</span>
                   </div>
-                  <Slider value={[temperature]} min={0.1} max={2} step={0.1}
-                    onValueChange={(v) => setTemperature(Array.isArray(v) ? v[0] : v)} />
+                  <div className="px-0.5 py-1">
+                    <Slider value={[temperature]} min={0.1} max={2} step={0.1}
+                      onValueChange={(v) => setTemperature(Array.isArray(v) ? v[0] : v)} />
+                  </div>
                 </div>
                 <div>
-                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                  <div className="flex justify-between text-xs text-muted-foreground mb-2">
                     <span>Repetition Penalty</span>
-                    <span>{repetitionPenalty.toFixed(1)}</span>
+                    <span className="font-mono tabular-nums">{repetitionPenalty.toFixed(1)}</span>
                   </div>
-                  <Slider value={[repetitionPenalty]} min={0.1} max={5} step={0.1}
-                    onValueChange={(v) => setRepetitionPenalty(Array.isArray(v) ? v[0] : v)} />
+                  <div className="px-0.5 py-1">
+                    <Slider value={[repetitionPenalty]} min={0.1} max={5} step={0.1}
+                      onValueChange={(v) => setRepetitionPenalty(Array.isArray(v) ? v[0] : v)} />
+                  </div>
                 </div>
                 <div>
-                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                  <div className="flex justify-between text-xs text-muted-foreground mb-2">
                     <span>Top-P</span>
-                    <span>{topP.toFixed(2)}</span>
+                    <span className="font-mono tabular-nums">{topP.toFixed(2)}</span>
                   </div>
-                  <Slider value={[topP]} min={0} max={1} step={0.05}
-                    onValueChange={(v) => setTopP(Array.isArray(v) ? v[0] : v)} />
+                  <div className="px-0.5 py-1">
+                    <Slider value={[topP]} min={0} max={1} step={0.05}
+                      onValueChange={(v) => setTopP(Array.isArray(v) ? v[0] : v)} />
+                  </div>
                 </div>
                 <div>
-                  <div className="flex justify-between text-xs text-muted-foreground mb-1">
+                  <div className="flex justify-between text-xs text-muted-foreground mb-2">
                     <span>Chunk Length (0 = off)</span>
-                    <span>{chunkLength}</span>
+                    <span className="font-mono tabular-nums">{chunkLength}</span>
                   </div>
-                  <Slider value={[chunkLength]} min={0} max={1000} step={50}
-                    onValueChange={(v) => setChunkLength(Array.isArray(v) ? v[0] : v)} />
+                  <div className="px-0.5 py-1">
+                    <Slider value={[chunkLength]} min={0} max={1000} step={50}
+                      onValueChange={(v) => setChunkLength(Array.isArray(v) ? v[0] : v)} />
+                  </div>
                 </div>
               </div>
             </div>
