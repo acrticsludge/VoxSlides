@@ -116,7 +116,7 @@ export default function Home() {
     setAudioUrl(null);
 
     try {
-      const res = await fetch("/api/v1/tts", {
+      const res = await fetch("/api/v1/tts/fishspeech", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -176,7 +176,7 @@ export default function Home() {
             {/* Voice Sample */}
             <div className="p-4 rounded-lg border border-border bg-card">
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Voice Sample</h3>
-              <p className="text-xs text-muted-foreground mb-3">Save a voice sample for premium voice cloning (coming soon). Free tier uses Microsoft Edge TTS.</p>
+              <p className="text-xs text-muted-foreground mb-3">Upload or record a 10-30 second audio clip for zero-shot voice cloning via FishSpeech S2 Pro.</p>
 
               {speakerAudio ? (
                 <div className="flex items-center justify-between gap-2 p-2 rounded bg-white/[0.03] border border-border">
@@ -225,7 +225,7 @@ export default function Home() {
 
         <div className="mt-8 max-w-md mx-auto relative">
           <ShimmerButton data-testid="generate-btn" onClick={handleGenerate} disabled={generating} className="w-full h-12 text-base font-semibold" background="#f5a623">
-            {generating ? "Generating with emotion..." : "Generate Speech"}
+            {generating ? "FishSpeech generating..." : "Generate with FishSpeech"}
           </ShimmerButton>
           {generating && <BorderBeam />}
         </div>

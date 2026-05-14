@@ -1,30 +1,60 @@
 import { NextRequest, NextResponse } from "next/server";
-import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
 import { z } from "zod";
+import { spawnSync } from "child_process";
+import { writeFileSync, unlinkSync, mkdtempSync, readFileSync, existsSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
+import { resolve } from "path";
+import { parseScript, applyModifiers, buildFullText, Segment } from "@/lib/script-utils";
+import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
+
+// ffmpeg-static path gets mangled by Turbopack, resolve manually
+const FFMPEG_PATH = (() => {
+  try {
+    // Try direct import first
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const p = require("ffmpeg-static") as string;
+    if (p && p.length > 5) return p;
+  } catch {
+    // fallback: hardcoded path relative to project
+  }
+  return resolve(process.cwd(), "node_modules/ffmpeg-static/ffmpeg.exe");
+})();
+console.log("[tts] ffmpeg path:", FFMPEG_PATH);
+
+const NGROK_HEADERS = { "ngrok-skip-browser-warning": "1" };
 
 const RequestSchema = z.object({
   script: z.string().min(1, "Script is required").max(5000, "Script too long"),
-  speakerAudio: z.string().optional(),
+  speakerAudio: z.string().min(1, "Voice sample is required"),
 });
 
-// ── ElevenLabs voice helpers ──
-
-// Preset ElevenLabs voice (free tier compatible — high quality, expressive)
-const PRESET_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
+// Condition → speed multiplier for Chatterbox
+const CONDITION_SPEED: Record<string, number> = {
+  excited:         1.15,
+  whisper:         0.7,
+  "slow and dramatic": 0.5,
+  fast:            1.6,
+  nervous:         1.2,
+  crying:          0.6,
+  angry:           1.25,
+  calm:            0.75,
+  laughing:        1.1,
+  sarcastic:       0.9,
+  storytelling:    0.85,
+  breathless:      1.4,
+};
+const ELEVENLABS_PRESET_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"; // Rachel
 
 async function tryCloneVoice(audioBase64: string, apiKey: string): Promise<string | null> {
-  // Attempt instant voice clone (requires paid plan). Returns null if not permitted.
+  const raw = audioBase64.split(",").pop() ?? audioBase64;
+  const buffer = Buffer.from(raw, "base64");
+  const blob = new Blob([buffer], { type: "audio/wav" });
+  const form = new FormData();
+  form.append("name", "voxslides-clone");
+  form.append("files", blob, "voice-sample.wav");
+
   try {
-    const raw = audioBase64.split(",").pop() ?? audioBase64;
-    const buffer = Buffer.from(raw, "base64");
-    const mime = audioBase64.startsWith("data:")
-      ? audioBase64.split(",")[0].split(";")[0].split(":").pop() ?? "audio/wav"
-      : "audio/wav";
-
-    const form = new FormData();
-    form.append("files", new Blob([buffer], { type: mime }), "voice.wav");
-    form.append("name", "voxslides-clone");
-
     const res = await fetch("https://api.elevenlabs.io/v1/voices/add", {
       method: "POST",
       headers: { "xi-api-key": apiKey },
@@ -33,11 +63,6 @@ async function tryCloneVoice(audioBase64: string, apiKey: string): Promise<strin
 
     if (!res.ok) {
       const text = await res.text();
-      // missing_permissions means free tier → use preset voice
-      if (text.includes("missing_permissions") || text.includes("401")) {
-        console.warn("[tts] Voice cloning not available on this plan, using preset voice");
-        return null;
-      }
       throw new Error(`ElevenLabs clone failed (${res.status}): ${text}`);
     }
 
@@ -85,27 +110,6 @@ async function generateWithElevenLabs(
   return Buffer.from(arrayBuffer);
 }
 
-// ── Emotion text modifiers (for ElevenLabs cloned voice) ──
-// The cloned voice delivers emotion naturally; we nudge with punctuation & casing.
-
-const MODIFIERS: Record<
-  string,
-  { punct: string; casing: "upper" | "lower" | "normal" }
-> = {
-  excited:         { punct: "!", casing: "normal" },
-  whisper:         { punct: "...", casing: "lower" },
-  "slow and dramatic": { punct: "...", casing: "normal" },
-  fast:            { punct: "!", casing: "normal" },
-  nervous:         { punct: "...", casing: "normal" },
-  crying:          { punct: "...", casing: "lower" },
-  angry:           { punct: "!", casing: "upper" },
-  calm:            { punct: "...", casing: "lower" },
-  laughing:        { punct: "!", casing: "normal" },
-  sarcastic:       { punct: ".", casing: "normal" },
-  storytelling:    { punct: "...", casing: "normal" },
-  breathless:      { punct: "...", casing: "lower" },
-};
-
 // ── SSML prosody (for msedge-tts fallback) ──
 
 const CONDITION_PROSODY: Record<
@@ -127,56 +131,6 @@ const CONDITION_PROSODY: Record<
 };
 
 const DEFAULT_PROSODY = { rate: "1.0", pitch: "+0Hz", volume: 100 };
-
-interface Segment {
-  text: string;
-  condition: string | null;
-}
-
-// ── Script utilities ──
-
-function parseScript(fullScript: string): Segment[] {
-  const regex = /\[([^\]]+)\]\s*/g;
-  const segments: Segment[] = [];
-  let lastIndex = 0;
-  let currentCondition: string | null = null;
-  let match: RegExpExecArray | null;
-
-  while ((match = regex.exec(fullScript)) !== null) {
-    const before = fullScript.slice(lastIndex, match.index);
-    if (before.trim()) {
-      segments.push({ text: before.trim(), condition: currentCondition });
-    }
-    currentCondition = match[1].toLowerCase().trim();
-    lastIndex = match.index + match[0].length;
-  }
-
-  const remaining = fullScript.slice(lastIndex);
-  if (remaining.trim()) {
-    segments.push({ text: remaining.trim(), condition: currentCondition });
-  }
-
-  return segments;
-}
-
-function applyModifiers(text: string, condition: string | null): string {
-  if (!condition) return text;
-  const mod = MODIFIERS[condition];
-  if (!mod) return text;
-
-  let t = text;
-  if (mod.casing === "upper") t = t.toUpperCase();
-  else if (mod.casing === "lower") t = t.toLowerCase();
-
-  const last = t.trim().slice(-1);
-  if (!/[.!?…]/.test(last)) {
-    t = t.trim() + mod.punct;
-  } else if (mod.punct === "!" && last === ".") {
-    t = t.trim().slice(0, -1) + "!";
-  }
-
-  return t;
-}
 
 function escapeXml(text: string): string {
   return text
@@ -253,16 +207,10 @@ export async function POST(req: NextRequest) {
       } else {
         try {
         // Try voice clone (paid plans) — falls back to preset voice (free tier)
-        const voiceId = (await tryCloneVoice(speakerAudio, elKey)) ?? PRESET_VOICE_ID;
+        const voiceId = (await tryCloneVoice(speakerAudio, elKey)) ?? ELEVENLABS_PRESET_VOICE_ID;
 
         // Build plain text with emotion modifiers
-        const fullText = segments
-          .map((seg) => applyModifiers(seg.text, seg.condition))
-          .filter(Boolean)
-          .join(" ")
-          .trim()
-          .replace(/\s+\.\.\./g, "...")
-          .replace(/\.\.\.\s+/g, "... ");
+        const fullText = buildFullText(segments);
 
         if (!fullText) {
           return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
