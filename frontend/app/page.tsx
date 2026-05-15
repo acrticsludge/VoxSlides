@@ -9,8 +9,10 @@ import { PRESET_CONDITIONS } from "@/lib/conditions";
 import toast, { Toaster } from "react-hot-toast";
 import { ShimmerButton } from "@/components/ui/shimmer-button";
 import { BorderBeam } from "@/components/ui/border-beam";
-import { Upload, Trash2 } from "lucide-react";
+import { Upload, Trash2, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import { VoiceRecorder } from "@/components/voice-recorder/VoiceRecorder";
 
 const CONDITION_COLORS: Record<string, string> = {
@@ -78,6 +80,13 @@ export default function Home() {
   const [speakerFileName, setSpeakerFileName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // FishSpeech tuning params
+  const [referenceText, setReferenceText] = useState("");
+  const [temperature, setTemperature] = useState(0.8);
+  const [repetitionPenalty, setRepetitionPenalty] = useState(1.1);
+  const [topP, setTopP] = useState(0.8);
+  const [chunkLength, setChunkLength] = useState(300);
+
   const handleFileUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -111,16 +120,26 @@ export default function Home() {
       toast.error("Type a script before generating.");
       return;
     }
+    if (!speakerAudio) {
+      toast.error("Upload or record a voice sample first.");
+      return;
+    }
 
     setGenerating(true);
     setAudioUrl(null);
 
     try {
-      const res = await fetch("/api/v1/tts", {
+      const res = await fetch("/api/v1/tts/fishspeech", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           script: compiledScript,
+          speakerAudio,
+          referenceText: referenceText || undefined,
+          temperature,
+          repetitionPenalty,
+          topP,
+          chunkLength,
         }),
       });
 
@@ -147,7 +166,7 @@ export default function Home() {
     } finally {
       setGenerating(false);
     }
-  }, [compiledScript, slots]);
+  }, [compiledScript, slots, speakerAudio, referenceText, temperature, repetitionPenalty, topP, chunkLength]);
 
   const handleReplay = useCallback((gen: Generation) => {
     setCompiledScript(gen.script);
@@ -176,7 +195,7 @@ export default function Home() {
             {/* Voice Sample */}
             <div className="p-4 rounded-lg border border-border bg-card">
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Voice Sample</h3>
-              <p className="text-xs text-muted-foreground mb-3">Save a voice sample for premium voice cloning (coming soon). Free tier uses Microsoft Edge TTS.</p>
+              <p className="text-xs text-muted-foreground mb-3">Upload or record a 10-30 second audio clip for zero-shot voice cloning via FishSpeech S2 Pro.</p>
 
               {speakerAudio ? (
                 <div className="flex items-center justify-between gap-2 p-2 rounded bg-white/[0.03] border border-border">
@@ -215,6 +234,65 @@ export default function Home() {
               </div>
             </div>
 
+            {/* Voice Tuning */}
+            <div className="p-5 rounded-lg border border-border bg-card">
+              <div className="flex items-center gap-2 mb-4">
+                <Settings2 className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Voice Tuning</h3>
+              </div>
+              <div className="space-y-5">
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1.5">Reference Text</label>
+                  <Input
+                    placeholder="Transcribe your reference audio (improves cloning)"
+                    value={referenceText}
+                    onChange={(e) => setReferenceText(e.target.value)}
+                    className="text-xs h-9"
+                  />
+                </div>
+                <div className="pt-0.5">
+                  <div className="flex justify-between text-xs text-muted-foreground mb-2">
+                    <span>Temperature</span>
+                    <span className="font-mono tabular-nums">{temperature.toFixed(1)}</span>
+                  </div>
+                  <div className="px-0.5 py-1">
+                    <Slider value={[temperature]} min={0.1} max={2} step={0.1}
+                      onValueChange={(v) => setTemperature(Array.isArray(v) ? v[0] : v)} />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs text-muted-foreground mb-2">
+                    <span>Repetition Penalty</span>
+                    <span className="font-mono tabular-nums">{repetitionPenalty.toFixed(1)}</span>
+                  </div>
+                  <div className="px-0.5 py-1">
+                    <Slider value={[repetitionPenalty]} min={0.1} max={5} step={0.1}
+                      onValueChange={(v) => setRepetitionPenalty(Array.isArray(v) ? v[0] : v)} />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs text-muted-foreground mb-2">
+                    <span>Top-P</span>
+                    <span className="font-mono tabular-nums">{topP.toFixed(2)}</span>
+                  </div>
+                  <div className="px-0.5 py-1">
+                    <Slider value={[topP]} min={0} max={1} step={0.05}
+                      onValueChange={(v) => setTopP(Array.isArray(v) ? v[0] : v)} />
+                  </div>
+                </div>
+                <div>
+                  <div className="flex justify-between text-xs text-muted-foreground mb-2">
+                    <span>Chunk Length (0 = off)</span>
+                    <span className="font-mono tabular-nums">{chunkLength}</span>
+                  </div>
+                  <div className="px-0.5 py-1">
+                    <Slider value={[chunkLength]} min={0} max={1000} step={50}
+                      onValueChange={(v) => setChunkLength(Array.isArray(v) ? v[0] : v)} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Compiled Preview */}
             <div className="p-4 rounded-lg border border-border bg-card">
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Compiled Preview</h3>
@@ -224,8 +302,8 @@ export default function Home() {
         </div>
 
         <div className="mt-8 max-w-md mx-auto relative">
-          <ShimmerButton data-testid="generate-btn" onClick={handleGenerate} disabled={generating} className="w-full h-12 text-base font-semibold" background="#f5a623">
-            {generating ? "Generating with emotion..." : "Generate Speech"}
+          <ShimmerButton data-testid="generate-btn" onClick={handleGenerate} disabled={generating || !speakerAudio} className="w-full h-12 text-base font-semibold" background="#f5a623">
+            {generating ? "FishSpeech generating..." : speakerAudio ? "Generate with FishSpeech" : "Upload a voice sample first"}
           </ShimmerButton>
           {generating && <BorderBeam />}
         </div>
