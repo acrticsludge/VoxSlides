@@ -1,28 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { spawnSync } from "child_process";
-import { writeFileSync, unlinkSync, mkdtempSync, readFileSync, existsSync } from "fs";
-import { join } from "path";
-import { tmpdir } from "os";
-import { resolve } from "path";
-import { parseScript, applyModifiers, buildFullText, Segment } from "@/lib/script-utils";
+import { parseScript, buildFullText, Segment } from "@/lib/script-utils";
 import { MsEdgeTTS, OUTPUT_FORMAT } from "msedge-tts";
-
-// ffmpeg-static path gets mangled by Turbopack, resolve manually
-const FFMPEG_PATH = (() => {
-  try {
-    // Try direct import first
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const p = require("ffmpeg-static") as string;
-    if (p && p.length > 5) return p;
-  } catch {
-    // fallback: hardcoded path relative to project
-  }
-  return resolve(process.cwd(), "node_modules/ffmpeg-static/ffmpeg.exe");
-})();
-console.log("[tts] ffmpeg path:", FFMPEG_PATH);
-
-const NGROK_HEADERS = { "ngrok-skip-browser-warning": "1" };
 
 const RequestSchema = z.object({
   script: z.string().min(1, "Script is required").max(5000, "Script too long"),
