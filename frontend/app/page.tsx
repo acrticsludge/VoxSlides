@@ -291,7 +291,7 @@ export default function Home() {
         {/* ═══ Center Panel ═══ */}
         <main className="flex-1 flex flex-col relative bg-surface-bright p-8 overflow-hidden">
           {/* Editor Area */}
-          <div className="flex-1 border border-outline-variant/60 rounded-xl bg-surface flex flex-col relative shadow-[0_1px_3px_rgba(0,0,0,0.04)] focus-within:border-outline-variant focus-within:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-300 overflow-hidden">
+          <div className="flex-1 border border-outline-variant/60 rounded-xl bg-surface flex flex-col relative shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all duration-300 overflow-hidden">
             <div className="flex-1 p-8 overflow-y-auto">
               <SlotEditor
                 text={text}

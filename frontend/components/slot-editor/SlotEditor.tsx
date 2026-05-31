@@ -185,8 +185,8 @@ export function SlotEditor({
           placeholder="Start typing your script here...
 
 Use [excited], [whisper], [angry] tags to shift emotional delivery."
-          className="w-full flex-1 border-none focus:ring-0 p-0 text-[15px] leading-[2] bg-transparent resize-none text-on-surface min-h-[200px] tracking-[0.01em] placeholder:text-on-surface-variant/25 placeholder:leading-[2] placeholder:tracking-[0.01em] transition-colors duration-200"
-          style={{ caretColor: "#000000" }}
+          className="w-full flex-1 border-none focus:ring-0 focus:outline-none p-0 text-[15px] leading-[2] bg-transparent resize-none text-on-surface min-h-[200px] tracking-[0.01em] placeholder:text-on-surface-variant/25 placeholder:leading-[2] placeholder:tracking-[0.01em] transition-colors duration-200"
+          style={{ caretColor: "#000000", outline: "none" }}
         />
         {!text && (
           <div className="absolute top-0 left-0 pointer-events-none text-on-surface-variant/25 text-[15px] leading-[2] tracking-[0.01em]">

@@ -104,6 +104,16 @@
   border-color: var(--color-outline-variant);
 }
 
+/* Remove ugly browser default focus outlines — use Tailwind focus utilities instead */
+*:focus {
+  outline: none;
+}
+
+textarea, input:not([type="range"]) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 body {
   background-color: var(--color-background);
   color: var(--color-on-surface);
