@@ -112,7 +112,7 @@ export function VoiceRecorder({ onAudioReady, disabled }: VoiceRecorderProps) {
     return (
       <button
         onClick={stopRecording}
-        className="flex-1 py-2 bg-surface text-xs font-bold uppercase border border-red-300 rounded hover:bg-surface-container transition-colors flex items-center justify-center gap-1.5 text-red-500"
+        className="flex-1 h-12 bg-surface text-xs font-bold uppercase border border-red-300 rounded hover:bg-surface-container transition-colors flex items-center justify-center gap-1.5 text-red-500"
       >
         <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>stop</span>
         Stop ({formatTime(elapsed)})
@@ -124,7 +124,7 @@ export function VoiceRecorder({ onAudioReady, disabled }: VoiceRecorderProps) {
     <button
       onClick={startRecording}
       disabled={disabled}
-      className="flex-1 bg-primary text-on-primary rounded py-2 text-xs font-bold uppercase hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-40"
+      className="flex-1 h-12 bg-primary text-on-primary rounded text-xs font-bold uppercase hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-40"
     >
       <span className="material-symbols-outlined text-[16px]">mic</span>
       Record

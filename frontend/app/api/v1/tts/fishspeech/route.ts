@@ -90,8 +90,10 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     console.error("[fishspeech] Error:", err);
-    const message =
-      err instanceof Error ? err.message : "Speech generation failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // Never leak internal error messages to the client
+    return NextResponse.json(
+      { error: "Speech generation failed" },
+      { status: 500 }
+    );
   }
 }

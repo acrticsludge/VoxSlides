@@ -61,7 +61,7 @@ export function AudioPlayer({ audioUrl }: AudioPlayerProps) {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="bg-primary-container rounded-lg p-4">
+    <div className="bg-surface-container rounded-lg p-4">
       <audio ref={audioRef} src={audioUrl} preload="metadata" />
 
       {/* Waveform bars */}
@@ -69,7 +69,7 @@ export function AudioPlayer({ audioUrl }: AudioPlayerProps) {
         {Array.from({ length: 20 }, (_, i) => (
           <div
             key={i}
-            className="w-1.5 bg-on-primary/60 rounded-full transition-all"
+            className="w-1.5 bg-primary/60 rounded-full transition-all"
             style={{
               height: playing
                 ? `${8 + Math.sin(i * 0.8) * 6 + 6}px`
@@ -86,7 +86,7 @@ export function AudioPlayer({ audioUrl }: AudioPlayerProps) {
       <div className="flex items-center gap-3">
         <button
           onClick={togglePlay}
-          className="w-8 h-8 rounded-full bg-on-primary text-primary flex items-center justify-center shrink-0 hover:opacity-90 transition-opacity"
+          className="w-12 h-12 rounded-full bg-primary text-on-primary flex items-center justify-center shrink-0 hover:opacity-90 transition-opacity"
         >
           <span
             className="material-symbols-outlined text-[18px]"
@@ -96,7 +96,7 @@ export function AudioPlayer({ audioUrl }: AudioPlayerProps) {
           </span>
         </button>
 
-        <span className="text-code-sm text-on-primary/80 w-10 tabular-nums">
+        <span className="text-xs text-on-surface-variant w-10 tabular-nums">
           {formatTime(currentTime)}
         </span>
 
@@ -109,20 +109,20 @@ export function AudioPlayer({ audioUrl }: AudioPlayerProps) {
           onChange={handleSeek}
           className="flex-1 h-1 appearance-none cursor-pointer rounded-full"
           style={{
-            background: `linear-gradient(to right, #fea619 ${progress}%, rgba(255,255,255,0.2) ${progress}%)`,
+            background: `linear-gradient(to right, #000000 ${progress}%, rgba(0,0,0,0.15) ${progress}%)`,
             height: "4px",
             borderRadius: "2px",
           }}
         />
 
-        <span className="text-code-sm text-on-primary/80 w-10 tabular-nums text-right">
+        <span className="text-xs text-on-surface-variant w-10 tabular-nums text-right">
           {formatTime(duration)}
         </span>
 
         <a
           href={audioUrl}
-          download="voxslides-output.webm"
-          className="text-on-primary/80 hover:text-on-primary transition-colors"
+          download="voxslides-output"
+          className="text-on-surface-variant hover:text-primary transition-colors"
         >
           <span className="material-symbols-outlined text-lg">download</span>
         </a>

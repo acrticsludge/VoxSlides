@@ -33,12 +33,12 @@ export function SlotPicker({ onSelect, open, onOpenChange, children }: SlotPicke
         align="center"
       >
         <div className="flex justify-between items-center mb-4 border-b border-outline-variant pb-2">
-          <h4 className="text-label-mono text-sm font-bold text-primary uppercase tracking-wider">
+          <h4 className="font-mono text-sm font-bold text-primary uppercase tracking-wider">
             Insert Condition
           </h4>
           <button
             onClick={() => onOpenChange(false)}
-            className="text-on-surface-variant hover:text-primary transition-colors"
+            className="w-10 h-10 flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors"
           >
             <span className="material-symbols-outlined text-[16px]">close</span>
           </button>
@@ -75,12 +75,12 @@ export function SlotPicker({ onSelect, open, onOpenChange, children }: SlotPicke
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleCustomAdd();
                 }}
-                className="h-9 w-full min-w-0 rounded-lg border border-outline-variant bg-transparent px-3 py-1 text-sm transition-colors outline-none placeholder:text-on-surface-variant/40 focus-visible:border-primary text-on-surface"
+                className="h-12 w-full min-w-0 rounded-lg border border-outline-variant bg-transparent px-3 py-1 text-sm transition-colors outline-none placeholder:text-on-surface-variant/40 focus-visible:border-primary text-on-surface"
               />
               <button
                 onClick={handleCustomAdd}
                 disabled={!custom.trim()}
-                className="h-9 px-4 rounded-lg bg-primary text-on-primary text-[11px] font-bold uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-40"
+                className="h-12 px-4 rounded-lg bg-primary text-on-primary text-[11px] font-bold uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-40"
               >
                 Add
               </button>

@@ -30,7 +30,7 @@ export function SlotChip({ slot, onRemove }: SlotChipProps) {
       <span className="text-[11px]">{slot.condition}</span>
       <button
         onClick={() => onRemove(slot.id)}
-        className="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity"
+        className="flex items-center justify-center w-8 h-8 -mr-1 opacity-70 hover:opacity-100 transition-opacity"
       >
         <span className="material-symbols-outlined text-[14px]">close</span>
       </button>

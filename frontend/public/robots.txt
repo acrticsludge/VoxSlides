@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /settings/
+Disallow: /dashboard/
+
+Sitemap: https://voxslides.com/sitemap.xml

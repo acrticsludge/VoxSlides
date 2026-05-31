@@ -159,7 +159,7 @@ export function SlotEditor({
           <button
             key={preset.value}
             onClick={() => quickInsert(preset.value)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-low border border-outline-variant font-label-mono text-xs text-on-surface hover:border-primary transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-low border border-outline-variant font-mono text-xs text-on-surface hover:border-primary transition-colors"
           >
             <span>{preset.emoji}</span>
             <span>{preset.label}</span>
