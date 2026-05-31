@@ -1,6 +1,5 @@
 "use client";
 
-import { X } from "lucide-react";
 import { PRESET_CONDITIONS, CONDITION_COLORS } from "@/lib/conditions";
 import type { Slot } from "@/types";
 
@@ -11,11 +10,11 @@ interface SlotChipProps {
 
 function getColorClasses(slot: Slot): string {
   if (slot.isCustom) {
-    return "bg-teal-500/20 text-teal-300 border-teal-500/30";
+    return "bg-primary/10 text-primary border-primary/20";
   }
   const preset = PRESET_CONDITIONS.find((p) => p.value === slot.condition);
-  if (!preset) return "bg-teal-500/20 text-teal-300 border-teal-500/30";
-  return CONDITION_COLORS[preset.color] ?? "bg-teal-500/20 text-teal-300 border-teal-500/30";
+  if (!preset) return "bg-primary/10 text-primary border-primary/20";
+  return CONDITION_COLORS[preset.color] ?? "bg-primary/10 text-primary border-primary/20";
 }
 
 export function SlotChip({ slot, onRemove }: SlotChipProps) {
@@ -25,20 +24,15 @@ export function SlotChip({ slot, onRemove }: SlotChipProps) {
 
   return (
     <span
-      data-testid="slot-chip"
-      className={`
-        inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium
-        border pointer-events-auto ${getColorClasses(slot)}
-      `}
+      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium border ${getColorClasses(slot)}`}
     >
       {preset?.emoji}
-      {slot.condition}
+      <span className="text-[11px]">{slot.condition}</span>
       <button
-        data-testid="slot-chip-remove"
         onClick={() => onRemove(slot.id)}
-        className="ml-0.5 hover:text-white transition-colors"
+        className="flex items-center justify-center opacity-70 hover:opacity-100 transition-opacity"
       >
-        <X className="h-3 w-3" />
+        <span className="material-symbols-outlined text-[14px]">close</span>
       </button>
     </span>
   );
