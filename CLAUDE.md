@@ -81,40 +81,6 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 Full details: Load the `stack` skill for full stack rationale, project structure, frontend libraries, and payments/docs setup.
 
-### Project Structure
-
-```
-/
-  app/                    # Next.js App Router (pages, API routes)
-  worker/                 # Background polling worker (separate Node.js process)
-  lib/                    # Shared utilities (encryption, auth, tiers)
-  public/                 # Static assets
-  content/docs/           # Fumadocs documentation
-  .opencode/              # OpenCode agent and skill files
-  CLAUDE.md               # This file — AI assistant instructions
-  AGENTS.md               # Agent mode instructions
-  .cursorrules            # Cursor (keep in sync with CLAUDE.md)
-  .windsurfrules          # Windsurf (keep in sync with CLAUDE.md)
-  GEMINI.md               # Gemini (keep in sync with CLAUDE.md)
-  .gitignore
-  package.json
-  tsconfig.json
-```
-
-Full details: Load the `stack` skill for full folder layout.
-
-### Tier Structure
-
-```
-Free    — 1 account per service, email-only alerts, 15-min polling, 7-day history
-Pro     — Multiple accounts, all channels, 5-min polling, 30-day history + graphs  ($10/mo)
-Team    — Everything in Pro + team features, 1-min polling, 90-day history         ($30/mo)
-```
-
-Tier limits checked in both the API and the worker. The UI shows upgrade prompts — the backend enforces limits.
-
----
-
 ## Coding Standards
 
 - **TypeScript everywhere** — strict mode, proper types, no `any`
@@ -325,15 +291,15 @@ Full details: Load the `tools` skill
 
 Run the corresponding checklist **before** each event:
 
-| Trigger                | Checklist                                                                   |
-| ---------------------- | --------------------------------------------------------------------------- |
-| Pre-launch             | Load the `pre-launch-checklist` skill                                       |
-| API changes            | Load `api-security-checklist` + `api-design-checklist` skills               |
-| UI/frontend changes    | Load `performance-checklist` + `mobile-checklist` skills                    |
-| Billing/payments       | Load the `billing-checklist` skill                                          |
-| Error handling changes | Load the `error-handling-checklist` skill                                   |
-| Onboarding flow        | Load the `onboarding-ux-checklist` skill                                    |
-| SEO/content            | Load the `seo-checklist` skill                                              |
+| Trigger                | Checklist                                                     |
+| ---------------------- | ------------------------------------------------------------- |
+| Pre-launch             | Load the `pre-launch-checklist` skill                         |
+| API changes            | Load `api-security-checklist` + `api-design-checklist` skills |
+| UI/frontend changes    | Load `performance-checklist` + `mobile-checklist` skills      |
+| Billing/payments       | Load the `billing-checklist` skill                            |
+| Error handling changes | Load the `error-handling-checklist` skill                     |
+| Onboarding flow        | Load the `onboarding-ux-checklist` skill                      |
+| SEO/content            | Load the `seo-checklist` skill                                |
 
 Do not ship until Critical items are resolved.
 

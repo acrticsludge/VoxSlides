@@ -5,6 +5,36 @@ Auto-logged by the build agent after significant fixes — no manual prompting n
 
 ---
 
+## 2026-05-31: [Process] AI-generated design output (Figma via Stitch) must be audited against actual codebase before implementation
+
+**What happened:** Google Stitch (a Figma alternative) generated a UI that looked correct visually but invented non-existent labels ("Preview" → should be "Latest Render"), removed features (only Upload, no Record), renamed presets, and dropped sidebar navigation items.
+
+**Root cause:** AI design tools hallucinate UI content — they generate plausible-looking interfaces without understanding the actual feature set, data model, or labels used in the codebase.
+
+**Fix:** Conducted a two-pass audit: first, cross-referenced every element in the generated HTML against the existing components and data; second, created a spec document preserving original features while applying the new visual layout (colors, spacing, typography, panel structure).
+
+**Prevention:** Before implementing any AI-generated design, create a discrepancy table mapping each generated element to its actual counterpart. Preserve original feature logic and labels — only apply the new styling/layout. Never trust AI design output verbatim.
+
+## 2026-05-28: [Architecture] Shared tag processing utility extracted for page-level toolbar use
+
+**What happened:** Toolbar tag buttons in the three-panel layout needed to insert `[condition]` tags into the textarea, but the `processTags` logic was private inside `SlotEditor.tsx`, making it unreachable from `page.tsx`.
+
+**Root cause:** The tag-to-slot processing function was defined as a local helper inside the `SlotEditor` component, not exported from a shared location.
+
+**Fix:** Moved `processTags` from `SlotEditor.tsx` to `compileScript.ts` (which already had the sister function `compileScript`), exported it, and updated both `SlotEditor.tsx` and `page.tsx` to import from there.
+
+**Prevention:** When implementing text-processing utilities shared across components, put them in a separate library file (like `compileScript.ts`) from the start rather than defining them inside a single component.
+
+## 2026-05-28: [Process] Full UI theme replacement can break Playwright test selectors
+
+**What happened:** Replacing the frontend from a dark-themed two-column layout to a light-themed three-panel layout removed several `data-testid` attributes that existing Playwright tests relied on (`compiled-preview`, `history-btn`, `history-item` inline).
+
+**Root cause:** Tests were written against specific DOM elements and testid attributes that no longer existed after the layout rewrite.
+
+**Fix:** Restored `data-testid="generate-btn"` and `data-testid="audio-player"` on their new equivalents. The removed testids (`compiled-preview`, `history-btn`) require test updates.
+
+**Prevention:** When doing a full UI replacement, audit all `data-testid` attributes against the test suite first. Add them to new equivalents during the rewrite, or update tests in the same PR.
+
 <!--
 Template for new entries:
 

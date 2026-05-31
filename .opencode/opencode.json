@@ -1,0 +1,69 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    ".opencode/skills/stack.md",
+    ".opencode/skills/practices.md",
+    ".opencode/skills/karpathy.md"
+  ],
+  "share": "manual",
+  "model": "deepseek/deepseek-v4-flash",
+
+  "provider": {
+    "deepseek": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "DeepSeek",
+      "options": {
+        "baseURL": "https://api.deepseek.com",
+        "apiKey": "{env:DEEPSEEK_API_KEY}"
+      },
+      "models": {
+        "deepseek-v4-flash": {
+          "name": "DeepSeek-V4-Flash",
+          "limit": {
+            "context": 1048576,
+            "output": 262144
+          },
+          "options": {
+            "reasoningEffort": "high",
+            "thinking": { "type": "enabled" }
+          }
+        },
+        "deepseek-v4-pro": {
+          "name": "DeepSeek-V4-Pro",
+          "limit": {
+            "context": 1048576,
+            "output": 262144
+          },
+          "options": {
+            "reasoningEffort": "high",
+            "thinking": { "type": "enabled" }
+          }
+        }
+      }
+    }
+  },
+
+  "mcp": {
+    "claude-mem": {
+      "type": "local",
+      "command": ["npx", "claude-mem", "mcp-server"],
+      "enabled": true
+    },
+    "opencode-vision": {
+      "type": "local",
+      "command": "opencode-vision"
+    }
+  },
+
+  "commands": {
+    "/visual-check": "Use Playwright to navigate to http://localhost:3000, take a full-page screenshot, save it to /tmp/visual-check.png, then use opencode-vision to analyze the screenshot and describe exactly what you see — layout, colors, spacing, any broken elements or overflow issues.",
+    "/visual-compare": "Use Playwright to screenshot http://localhost:3000 and save to /tmp/current.png. Then use opencode-vision to analyze it. I will describe what it should look like — identify any mismatches between what you see and my description, and list specific CSS/JSX fixes."
+  },
+
+  "permission": {
+    "bash": "allow",
+    "edit": "allow",
+    "write": "allow",
+    "read": "allow"
+  }
+}
