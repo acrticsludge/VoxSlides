@@ -1,8 +1,6 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Mic, Square } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface VoiceRecorderProps {
@@ -26,18 +24,15 @@ export function VoiceRecorder({ onAudioReady, disabled }: VoiceRecorderProps) {
   const startTimeRef = useRef(0);
 
   const stopRecording = useCallback(() => {
-    // Stop the MediaRecorder
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       mediaRecorderRef.current.stop();
     }
 
-    // Stop all tracks
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
 
-    // Clear timer
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -62,7 +57,6 @@ export function VoiceRecorder({ onAudioReady, disabled }: VoiceRecorderProps) {
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
         chunksRef.current = [];
 
-        // Convert blob to base64 data URL
         const reader = new FileReader();
         reader.onload = () => {
           const dataUrl = reader.result as string;
@@ -79,18 +73,16 @@ export function VoiceRecorder({ onAudioReady, disabled }: VoiceRecorderProps) {
       };
 
       mediaRecorderRef.current = recorder;
-      recorder.start(250); // collect data every 250ms
+      recorder.start(250);
 
       startTimeRef.current = Date.now();
       setElapsed(0);
       setRecording(true);
 
-      // Update elapsed timer every second
       timerRef.current = setInterval(() => {
         const now = Date.now();
         const secs = Math.floor((now - startTimeRef.current) / 1000);
         setElapsed(secs);
-        // Auto-stop at 60 seconds
         if (secs >= 60) {
           stopRecording();
         }
@@ -104,7 +96,6 @@ export function VoiceRecorder({ onAudioReady, disabled }: VoiceRecorderProps) {
     }
   }, [onAudioReady, stopRecording]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -119,28 +110,24 @@ export function VoiceRecorder({ onAudioReady, disabled }: VoiceRecorderProps) {
 
   if (recording) {
     return (
-      <Button
-        variant="outline"
-        size="sm"
+      <button
         onClick={stopRecording}
-        className="w-full border-red-500/50 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+        className="flex-1 py-2 bg-surface text-xs font-bold uppercase border border-red-300 rounded hover:bg-surface-container transition-colors flex items-center justify-center gap-1.5 text-red-500"
       >
-        <Square className="h-3.5 w-3.5 mr-2 fill-red-400" />
+        <span className="material-symbols-outlined text-[16px]" style={{ fontVariationSettings: "'FILL' 1" }}>stop</span>
         Stop ({formatTime(elapsed)})
-      </Button>
+      </button>
     );
   }
 
   return (
-    <Button
-      variant="outline"
-      size="sm"
+    <button
       onClick={startRecording}
       disabled={disabled}
-      className="w-full"
+      className="flex-1 bg-primary text-on-primary rounded py-2 text-xs font-bold uppercase hover:opacity-90 transition-opacity flex items-center justify-center gap-2 disabled:opacity-40"
     >
-      <Mic className="h-3.5 w-3.5 mr-2" />
-      Record Audio
-    </Button>
+      <span className="material-symbols-outlined text-[16px]">mic</span>
+      Record
+    </button>
   );
 }
