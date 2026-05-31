@@ -291,8 +291,8 @@ export default function Home() {
         {/* ═══ Center Panel ═══ */}
         <main className="flex-1 flex flex-col relative bg-surface-bright p-8 overflow-hidden">
           {/* Editor Area */}
-          <div className="flex-1 border border-outline-variant rounded-lg bg-surface flex flex-col relative shadow-sm overflow-hidden">
-            <div className="flex-1 p-6 overflow-y-auto">
+          <div className="flex-1 border border-outline-variant/60 rounded-xl bg-surface flex flex-col relative shadow-[0_1px_3px_rgba(0,0,0,0.04)] focus-within:border-outline-variant focus-within:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all duration-300 overflow-hidden">
+            <div className="flex-1 p-8 overflow-y-auto">
               <SlotEditor
                 text={text}
                 slots={slots}
@@ -304,7 +304,7 @@ export default function Home() {
             </div>
 
             {/* Status Bar */}
-            <div className="h-10 border-t border-outline-variant bg-surface-container-low rounded-b-lg flex items-center px-4 text-xs text-on-surface-variant justify-between shrink-0">
+            <div className="h-11 border-t border-outline-variant/40 bg-surface-container-low/50 rounded-b-xl flex items-center px-5 text-[11px] text-on-surface-variant/60 justify-between shrink-0 font-mono tracking-wide uppercase">
               <div className="flex gap-4">
                 <span>Words: {wordCount}</span>
                 <span>Chars: {charCount} / 5000</span>

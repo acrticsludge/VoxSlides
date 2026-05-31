@@ -154,27 +154,27 @@ export function SlotEditor({
       )}
 
       {/* Quick-insert pills */}
-      <div className="flex items-center gap-2 flex-wrap mb-4">
+      <div className="flex items-center gap-2 flex-wrap mb-5">
         {quickPresets.map((preset) => (
           <button
             key={preset.value}
             onClick={() => quickInsert(preset.value)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-surface-container-low border border-outline-variant font-mono text-xs text-on-surface hover:border-primary transition-colors"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-surface-container-low/80 border border-outline-variant/50 font-mono text-[11px] text-on-surface-variant hover:border-primary/40 hover:text-primary hover:bg-surface-container transition-all duration-200"
           >
-            <span>{preset.emoji}</span>
+            <span className="text-[13px]">{preset.emoji}</span>
             <span>{preset.label}</span>
           </button>
         ))}
         <SlotPicker onSelect={addSlot} open={pickerOpen} onOpenChange={setPickerOpen}>
-          <button className="flex items-center gap-1 px-3 py-1.5 rounded-full border border-dashed border-outline text-on-surface-variant hover:text-primary hover:border-primary transition-colors text-xs">
-            <span className="material-symbols-outlined text-[16px]">add</span>
+          <button className="flex items-center gap-1 px-3.5 py-1.5 rounded-full border border-dashed border-outline-variant/40 text-on-surface-variant/50 hover:text-primary hover:border-primary/40 transition-all duration-200 text-[11px] font-mono">
+            <span className="material-symbols-outlined text-[14px]">add</span>
             <span>Condition</span>
           </button>
         </SlotPicker>
       </div>
 
       {/* Textarea */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col relative">
         <textarea
           ref={textareaRef}
           value={text}
@@ -182,9 +182,16 @@ export function SlotEditor({
           onKeyUp={syncCursor}
           onClick={syncCursor}
           onMouseUp={syncCursor}
-          placeholder="Start typing your script here. Use tags like [excited] to direct the AI's delivery style..."
-          className="w-full flex-1 border-none focus:ring-0 p-0 text-[16px] leading-[1.8] bg-transparent resize-none placeholder:text-on-surface-variant/30 tracking-tight text-on-surface min-h-[200px]"
+          placeholder="Start typing your script here...
+
+Use [excited], [whisper], [angry] tags to shift emotional delivery."
+          className="w-full flex-1 border-none focus:ring-0 p-0 text-[15px] leading-[2] bg-transparent resize-none text-on-surface min-h-[200px] tracking-[0.01em] placeholder:text-on-surface-variant/25 placeholder:leading-[2] placeholder:tracking-[0.01em] transition-colors duration-200"
+          style={{ caretColor: "#000000" }}
         />
+        {!text && (
+          <div className="absolute top-0 left-0 pointer-events-none text-on-surface-variant/25 text-[15px] leading-[2] tracking-[0.01em]">
+          </div>
+        )}
       </div>
     </div>
   );
