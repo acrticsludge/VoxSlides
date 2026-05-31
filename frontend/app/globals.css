@@ -165,39 +165,3 @@ input[type="range"]:focus {
   0%, 100% { height: 4px; }
   50% { height: 20px; }
 }
-
-/* ── Touch targets — enforce 48px minimum on interactive elements ── */
-button, a, input[type="range"] {
-  min-height: 48px;
-}
-
-/* ── Responsive: tablet and below ── */
-@media (max-width: 1024px) {
-  /* Hide right sidebar (Latest Render / History) on tablets */
-  aside:nth-of-type(2) {
-    display: none;
-  }
-}
-
-/* ── Responsive: mobile ── */
-@media (max-width: 768px) {
-  /* Stack layout vertically on mobile */
-  .flex.flex-1 {
-    flex-direction: column;
-  }
-
-  /* Hide left sidebar on mobile — show editor full-width */
-  aside:first-of-type {
-    display: none;
-  }
-
-  /* Ensure main content fills width */
-  main {
-    width: 100%;
-  }
-
-  /* Header: smaller text, tighter padding */
-  header h1 {
-    font-size: 1.25rem;
-  }
-}

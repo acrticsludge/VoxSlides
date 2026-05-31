@@ -197,7 +197,7 @@ export default function Home() {
             <div className="px-8 mb-8 flex flex-col gap-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-medium text-on-surface-variant uppercase tracking-widest">Voice Identity</h3>
-                <span className="material-symbols-outlined text-on-surface-variant text-[16px] w-10 h-10 flex items-center justify-center cursor-pointer hover:text-primary transition-colors">info</span>
+                <span className="material-symbols-outlined text-on-surface-variant text-[16px] cursor-pointer hover:text-primary transition-colors">info</span>
               </div>
               {speakerAudio ? (
                 <div className="border border-outline-variant rounded-lg p-4 bg-surface flex items-center justify-between">
@@ -205,7 +205,7 @@ export default function Home() {
                     <span className="material-symbols-outlined text-primary text-[20px] shrink-0">audio_file</span>
                     <span className="text-sm truncate">{speakerFileName}</span>
                   </div>
-                <button onClick={clearAudio} className="w-10 h-10 flex items-center justify-center text-on-surface-variant hover:text-primary shrink-0">
+                <button onClick={clearAudio} className="text-on-surface-variant hover:text-primary shrink-0 p-2">
                   <span className="material-symbols-outlined text-[16px]">close</span>
                 </button>
                 </div>

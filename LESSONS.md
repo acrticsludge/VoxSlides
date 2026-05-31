@@ -5,6 +5,16 @@ Auto-logged by the build agent after significant fixes — no manual prompting n
 
 ---
 
+## 2026-05-31: [Bug] Global CSS rule `button, a, input { min-height: 48px }` destroyed entire layout
+
+**What happened:** Added a global CSS rule to enforce 48px touch targets on ALL buttons, links, and inputs. This forced every tiny pill, inline button, and link to be 48px tall, breaking the entire layout.
+
+**Root cause:** Touch target requirements (48x48px) apply to PRIMARY interactive elements, not every element. A global CSS rule is too broad — it affects preset chips, history items, close buttons, and all small UI elements.
+
+**Fix:** Removed the global CSS rule. Applied `h-12` (48px) via Tailwind only to specific primary action buttons (Generate, Upload, Record, Play, Help, Feedback).
+
+**Prevention:** Never enforce touch targets via global CSS selectors. Use Tailwind utility classes on specific elements instead. When an audit says "touch targets 48px", apply it surgically to primary CTAs, not to every `<button>` on the page.
+
 ## 2026-05-31: [Bug] Non-existent Tailwind classes (`px-unit-8`, `font-label-mono`) silently drop all styling
 
 **What happened:** The sidebar, header, and sections used `px-unit-8`, `py-unit-8`, `mx-unit-8`, `font-label-mono`, and `text-code-sm` classes that don't exist in Tailwind. Tailwind silently ignores unknown classes, so all padding/margin/font styling was missing — elements had zero spacing.
