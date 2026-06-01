@@ -6,9 +6,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Plus } from "lucide-react";
 import { PRESET_CONDITIONS } from "@/lib/conditions";
 
 interface SlotPickerProps {
@@ -30,32 +27,34 @@ export function SlotPicker({ onSelect, open, onOpenChange, children }: SlotPicke
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger
-        render={
-          children ?? (
-            <Button
-              data-testid="add-slot-btn"
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 rounded-full border-dashed"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          )
-        }
-      />
-      <PopoverContent className="w-72 p-3 backdrop-blur-xl bg-background/80" align="start">
+      <PopoverTrigger render={children ?? <button>+</button>} />
+      <PopoverContent
+        className="w-96 p-4 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)]"
+        align="center"
+      >
+        <div className="flex justify-between items-center mb-4 border-b border-outline-variant pb-2">
+          <h4 className="font-mono text-sm font-bold text-primary uppercase tracking-wider">
+            Insert Condition
+          </h4>
+          <button
+            onClick={() => onOpenChange(false)}
+            className="w-10 h-10 flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors"
+          >
+            <span className="material-symbols-outlined text-[16px]">close</span>
+          </button>
+        </div>
+
         <div className="space-y-3">
           <div>
-            <p className="text-sm font-medium mb-2 text-muted-foreground">
+            <p className="text-[11px] font-bold text-on-surface uppercase tracking-wider mb-2">
               Presets
             </p>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-2 gap-2">
               {PRESET_CONDITIONS.map((preset) => (
                 <button
                   key={preset.value}
                   onClick={() => onSelect(preset.value, false)}
-                  className="flex items-center gap-2 px-2.5 py-2 rounded-md text-xs transition-colors hover:bg-white/5 text-left border border-border/50"
+                  className="flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-colors bg-surface border border-outline-variant hover:border-primary text-on-surface text-left font-mono"
                 >
                   <span>{preset.emoji}</span>
                   <span>{preset.label}</span>
@@ -63,29 +62,28 @@ export function SlotPicker({ onSelect, open, onOpenChange, children }: SlotPicke
               ))}
             </div>
           </div>
-          <div className="border-t border-border pt-3">
-            <p className="text-sm font-medium mb-2 text-muted-foreground">
+
+          <div className="border-t border-outline-variant pt-3">
+            <p className="text-[11px] font-bold text-on-surface uppercase tracking-wider mb-2">
               Custom
             </p>
             <div className="flex gap-2">
-              <Input
+              <input
                 placeholder="e.g. robotic, whispery..."
                 value={custom}
                 onChange={(e) => setCustom(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") handleCustomAdd();
                 }}
-                className="h-8 text-xs"
+                className="h-12 w-full min-w-0 rounded-lg border border-outline-variant bg-transparent px-3 py-1 text-sm transition-colors outline-none placeholder:text-on-surface-variant/40 focus-visible:border-primary text-on-surface"
               />
-              <Button
-                size="sm"
-                variant="secondary"
+              <button
                 onClick={handleCustomAdd}
                 disabled={!custom.trim()}
-                className="h-8 text-xs"
+                className="h-12 px-4 rounded-lg bg-primary text-on-primary text-[11px] font-bold uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-40"
               >
                 Add
-              </Button>
+              </button>
             </div>
           </div>
         </div>

@@ -1,10 +1,6 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback } from "react";
-import { Play, Pause, Download } from "lucide-react";
-import { Slider } from "@/components/ui/slider";
-import { Button } from "@/components/ui/button";
-import { BlurFade } from "@/components/ui/blur-fade";
 
 interface AudioPlayerProps {
   audioUrl: string;
@@ -53,80 +49,84 @@ export function AudioPlayer({ audioUrl }: AudioPlayerProps) {
     setPlaying(!playing);
   }, [playing]);
 
-  const handleSeek = useCallback((value: number | readonly number[]) => {
+  const handleSeek = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const audio = audioRef.current;
     if (!audio) return;
-    const newTime = Array.isArray(value) ? value[0] : value;
+    const newTime = parseFloat(e.target.value);
     if (!isFinite(newTime) || newTime < 0) return;
     audio.currentTime = newTime;
     setCurrentTime(newTime);
   }, []);
 
-  const bars = Array.from({ length: 20 }, (_, i) => i);
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div data-testid="audio-player" className="mt-6">
-      <BlurFade inView>
-        <div className="p-4 rounded-lg border border-border bg-card">
-          <audio ref={audioRef} src={audioUrl} preload="metadata" />
+    <div className="bg-surface-container rounded-lg p-4">
+      <audio ref={audioRef} src={audioUrl} preload="metadata" />
 
-          {/* Waveform */}
-          <div className="flex items-end justify-center gap-[3px] h-12 mb-4">
-            {bars.map((i) => (
-              <div
-                key={i}
-                className="w-[3px] rounded-full bg-accent transition-all"
-                style={{
-                  height: playing ? `${8 + Math.sin(i * 0.8) * 6 + 6}px` : "4px",
-                  animation: playing
-                    ? `waveform ${0.6 + (i % 5) * 0.1}s ease-in-out ${i * 0.06}s infinite alternate`
-                    : "none",
-                }}
-              />
-            ))}
-          </div>
+      {/* Waveform bars */}
+      <div className="flex items-end justify-between h-16 mb-4 gap-1">
+        {Array.from({ length: 20 }, (_, i) => (
+          <div
+            key={i}
+            className="w-1.5 bg-primary/60 rounded-full transition-all"
+            style={{
+              height: playing
+                ? `${8 + Math.sin(i * 0.8) * 6 + 6}px`
+                : "4px",
+              animation: playing
+                ? `waveform ${0.6 + (i % 5) * 0.1}s ease-in-out ${i * 0.06}s infinite alternate`
+                : "none",
+            }}
+          />
+        ))}
+      </div>
 
-          {/* Controls */}
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={togglePlay}
-              className="h-9 w-9 rounded-full"
-            >
-              {playing ? (
-                <Pause className="h-4 w-4" />
-              ) : (
-                <Play className="h-4 w-4 ml-0.5" />
-              )}
-            </Button>
+      {/* Controls */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={togglePlay}
+          className="w-12 h-12 rounded-full bg-primary text-on-primary flex items-center justify-center shrink-0 hover:opacity-90 transition-opacity"
+        >
+          <span
+            className="material-symbols-outlined text-[18px]"
+            style={{ fontVariationSettings: "'FILL' 1" }}
+          >
+            {playing ? "pause" : "play_arrow"}
+          </span>
+        </button>
 
-            <span className="text-xs text-muted-foreground w-10 tabular-nums">
-              {formatTime(currentTime)}
-            </span>
+        <span className="text-xs text-on-surface-variant w-10 tabular-nums">
+          {formatTime(currentTime)}
+        </span>
 
-            <Slider
-              value={[!isFinite(currentTime) ? 0 : currentTime]}
-              max={!isFinite(duration) || duration <= 0 ? 100 : duration}
-              step={0.1}
-              onValueChange={handleSeek}
-              className="flex-1"
-            />
+        <input
+          type="range"
+          min={0}
+          max={!isFinite(duration) || duration <= 0 ? 100 : duration}
+          step={0.1}
+          value={!isFinite(currentTime) ? 0 : currentTime}
+          onChange={handleSeek}
+          className="flex-1 h-1 appearance-none cursor-pointer rounded-full"
+          style={{
+            background: `linear-gradient(to right, #000000 ${progress}%, rgba(0,0,0,0.15) ${progress}%)`,
+            height: "4px",
+            borderRadius: "2px",
+          }}
+        />
 
-            <span className="text-xs text-muted-foreground w-10 tabular-nums text-right">
-              {formatTime(duration)}
-            </span>
+        <span className="text-xs text-on-surface-variant w-10 tabular-nums text-right">
+          {formatTime(duration)}
+        </span>
 
-            <a
-              href={audioUrl}
-              download="voxslides-output.webm"
-              className="text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Download className="h-4 w-4" />
-            </a>
-          </div>
-        </div>
-      </BlurFade>
+        <a
+          href={audioUrl}
+          download="voxslides-output"
+          className="text-on-surface-variant hover:text-primary transition-colors"
+        >
+          <span className="material-symbols-outlined text-lg">download</span>
+        </a>
+      </div>
     </div>
   );
 }
