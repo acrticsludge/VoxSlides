@@ -1,13 +1,31 @@
 import type { Slot } from "@/types";
 import { PRESET_CONDITIONS } from "@/lib/conditions";
 
+function snapToWordBoundary(text: string, pos: number): number {
+  // If already at a space or start/end, use as-is
+  if (pos === 0 || pos >= text.length) return pos;
+  if (text[pos - 1] === " " || text[pos] === " ") return pos;
+
+  // Find nearest space before pos
+  let back = pos;
+  while (back > 0 && text[back - 1] !== " " && text[back - 1] !== "\n") back--;
+
+  // Find nearest space after pos
+  let fwd = pos;
+  while (fwd < text.length && text[fwd] !== " " && text[fwd] !== "\n") fwd++;
+
+  // Pick whichever boundary is closer
+  return (pos - back) <= (fwd - pos) ? back : fwd;
+}
+
 export function compileScript(text: string, slots: Slot[]): string {
   const sorted = [...slots].sort((a, b) => b.position - a.position);
 
   let result = text;
   for (const slot of sorted) {
     const tag = `[${slot.condition}] `;
-    result = result.slice(0, slot.position) + tag + result.slice(slot.position);
+    const snapped = snapToWordBoundary(result, slot.position);
+    result = result.slice(0, snapped) + tag + result.slice(snapped);
   }
 
   return "Speaker 1: " + result.replace(/\s+/g, " ").trim();
