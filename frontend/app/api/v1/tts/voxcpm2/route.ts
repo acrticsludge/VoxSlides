@@ -18,11 +18,6 @@ const RequestSchema = z.object({
   denoise: z.boolean().optional(),
 });
 
-// Snap segment text to start/end at word boundaries
-function cleanSegmentText(text: string): string {
-  return text.trim();
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -52,13 +47,24 @@ export async function POST(req: NextRequest) {
     }
 
     // Build per-segment data with emotion-mapped control instructions
-    const segmentData = segments
+    let segmentData = segments
       .filter((s) => s.text.trim())
       .map((seg) => ({
-        text: applyModifiers(cleanSegmentText(seg.text), seg.condition),
+        text: applyModifiers(seg.text.trim(), seg.condition),
         emotion: seg.condition,
       }))
       .filter((s) => s.text.trim());
+
+    // Fix mid-word splits: if segment starts with lowercase (e.g. "ut this"),
+    // the previous segment ended mid-word — move the fragment back
+    for (let i = segmentData.length - 1; i > 0; i--) {
+      const firstChar = segmentData[i].text[0];
+      if (firstChar && firstChar === firstChar.toLowerCase() && firstChar !== firstChar.toUpperCase()) {
+        // Starts with lowercase → mid-word split, prepend to previous segment
+        segmentData[i - 1].text += segmentData[i].text;
+        segmentData.splice(i, 1);
+      }
+    }
 
     if (segmentData.length === 0) {
       return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
