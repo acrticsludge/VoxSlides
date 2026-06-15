@@ -17,7 +17,7 @@ export default function PrivacyPage() {
           <p>
             VoxSlides processes your voice recordings and text scripts to generate
             speech audio. Voice samples are sent to third-party TTS services
-            (ElevenLabs, FishSpeech) for processing and are not stored on our
+            (ElevenLabs, VoxCPM2) for processing and are not stored on our
             servers after generation.
           </p>
 
@@ -29,7 +29,7 @@ export default function PrivacyPage() {
 
           <h2 className="text-lg font-semibold text-on-surface pt-4">3. Third-Party Services</h2>
           <p>
-            We use ElevenLabs and FishSpeech for speech synthesis. These services
+            We use ElevenLabs and VoxCPM2 for speech synthesis. These services
             receive your audio and text input to generate output. Please refer to
             their respective privacy policies for details on how they handle data.
           </p>

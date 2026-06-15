@@ -103,3 +103,6 @@ temp/
 .superpowers/
 docs/*
 /me
+
+_distill_*
+_dream_*

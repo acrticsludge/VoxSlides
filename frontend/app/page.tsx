@@ -31,11 +31,10 @@ export default function Home() {
   const [speakerFileName, setSpeakerFileName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [referenceText, setReferenceText] = useState("");
-  const [temperature, setTemperature] = useState(0.8);
-  const [repetitionPenalty, setRepetitionPenalty] = useState(1.1);
-  const [topP, setTopP] = useState(0.8);
-  const [chunkLength, setChunkLength] = useState(300);
+  const [controlInstruction, setControlInstruction] = useState("");
+  const [cfgValue, setCfgValue] = useState(2);
+  const [doNormalize, setDoNormalize] = useState(false);
+  const [denoise, setDenoise] = useState(false);
 
   const [history, setHistory] = useState<Generation[]>([]);
 
@@ -74,8 +73,8 @@ export default function Home() {
       toast.error("Type a script before generating.");
       return;
     }
-    if (!speakerAudio) {
-      toast.error("Upload or record a voice sample first.");
+    if (!speakerAudio && !controlInstruction.trim()) {
+      toast.error("Provide a voice sample or a control instruction.");
       return;
     }
 
@@ -83,17 +82,16 @@ export default function Home() {
     setAudioUrl(null);
 
     try {
-      const res = await fetch("/api/v1/tts/fishspeech", {
+      const res = await fetch("/api/v1/tts/voxcpm2", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           script: compiledScript,
-          speakerAudio,
-          referenceText: referenceText || undefined,
-          temperature,
-          repetitionPenalty,
-          topP,
-          chunkLength,
+          speakerAudio: speakerAudio || undefined,
+          controlInstruction: controlInstruction || undefined,
+          cfgValue,
+          doNormalize,
+          denoise,
         }),
       });
 
@@ -125,8 +123,8 @@ export default function Home() {
       setGenerating(false);
     }
   }, [
-    compiledScript, slots, speakerAudio, referenceText,
-    temperature, repetitionPenalty, topP, chunkLength,
+    compiledScript, slots, speakerAudio, controlInstruction,
+    cfgValue, doNormalize, denoise,
   ]);
 
   const handleReplay = useCallback((gen: Generation) => {
@@ -184,8 +182,8 @@ export default function Home() {
               <span className="material-symbols-outlined">graphic_eq</span>
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-primary">Expressive TTS</h2>
-              <p className="text-xs text-on-surface-variant">Voice clone & script</p>
+              <h2 className="text-lg font-semibold text-primary">VoxCPM2 TTS</h2>
+              <p className="text-xs text-on-surface-variant">Voice Design &amp; Cloning</p>
             </div>
           </div>
 
@@ -244,29 +242,56 @@ export default function Home() {
 
             {/* Voice Tuning */}
             <div className="px-8 flex flex-col gap-6">
-              <h3 className="text-xs font-medium text-on-surface-variant uppercase tracking-widest">Voice Tuning</h3>
-              <div className="flex flex-col gap-5">
-                {[
-                  { label: "Temperature", value: temperature, set: setTemperature, min: 0.1, max: 2, step: 0.1, display: temperature.toFixed(1) },
-                  { label: "Repetition Penalty", value: repetitionPenalty, set: setRepetitionPenalty, min: 0.1, max: 5, step: 0.1, display: repetitionPenalty.toFixed(1) },
-                  { label: "Top-P", value: topP, set: setTopP, min: 0, max: 1, step: 0.05, display: topP.toFixed(2) },
-                  { label: "Chunk Length", value: chunkLength, set: setChunkLength, min: 0, max: 1000, step: 50, display: String(chunkLength) },
-                ].map((slider) => (
-                  <div key={slider.label} className="flex flex-col gap-2">
-                    <div className="flex justify-between items-center text-xs">
-                      <label className="text-on-surface">{slider.label}</label>
-                      <span className="text-on-surface-variant bg-surface-container-highest px-2 py-0.5 rounded text-xs">{slider.display}</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={slider.min}
-                      max={slider.max}
-                      step={slider.step}
-                      value={slider.value}
-                      onChange={(e) => slider.set(parseFloat(e.target.value))}
-                    />
-                  </div>
-                ))}
+              <h3 className="text-xs font-medium text-on-surface-variant uppercase tracking-widest">Voice Control</h3>
+              
+              {/* Control Instruction */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs text-on-surface">Control Instruction</label>
+                <textarea
+                  value={controlInstruction}
+                  onChange={(e) => setControlInstruction(e.target.value)}
+                  placeholder="e.g. A warm young woman / Excited and fast-paced"
+                  className="w-full h-20 px-3 py-2 text-sm border border-outline-variant rounded-lg bg-surface resize-none focus:outline-none focus:border-primary"
+                />
+                <p className="text-[10px] text-on-surface-variant">Describe voice characteristics (gender, age, tone, emotion)</p>
+              </div>
+
+              {/* CFG Value */}
+              <div className="flex flex-col gap-2">
+                <div className="flex justify-between items-center text-xs">
+                  <label className="text-on-surface">CFG Scale</label>
+                  <span className="text-on-surface-variant bg-surface-container-highest px-2 py-0.5 rounded text-xs">{cfgValue}</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={10}
+                  step={0.5}
+                  value={cfgValue}
+                  onChange={(e) => setCfgValue(parseFloat(e.target.value))}
+                />
+              </div>
+
+              {/* Toggles */}
+              <div className="flex flex-col gap-3">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={doNormalize}
+                    onChange={(e) => setDoNormalize(e.target.checked)}
+                    className="w-4 h-4 accent-primary"
+                  />
+                  <span className="text-xs text-on-surface">Normalize Audio</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={denoise}
+                    onChange={(e) => setDenoise(e.target.checked)}
+                    className="w-4 h-4 accent-primary"
+                  />
+                  <span className="text-xs text-on-surface">Denoise</span>
+                </label>
               </div>
             </div>
           </div>
