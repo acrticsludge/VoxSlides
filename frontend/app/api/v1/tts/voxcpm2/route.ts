@@ -1,85 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { parseScript, applyModifiers } from "@/lib/script-utils";
+import { applyModifiers } from "@/lib/script-utils";
 import {
   synthesizeSpeech,
   getVoxCPM2SpaceId,
   VoxCPM2Params,
 } from "@/lib/voxcpm2";
 
+const SegmentSchema = z.object({
+  text: z.string(),
+  emotion: z.string().nullable(),
+});
+
 const RequestSchema = z.object({
-  script: z.string().min(1, "Script is required").max(5000, "Script too long"),
+  segments: z.array(SegmentSchema).min(1),
   speakerAudio: z.string().optional(),
   controlInstruction: z.string().optional(),
-  usePromptText: z.boolean().optional(),
-  promptText: z.string().optional(),
   cfgValue: z.number().min(0).max(10).optional(),
   doNormalize: z.boolean().optional(),
   denoise: z.boolean().optional(),
 });
-
-// Fix tag positions: ensure every [tag] is at a word boundary (not mid-word)
-function fixTagPositions(script: string): string {
-  const tagRegex = /\[([^\]]+)\]/g;
-  let result = "";
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = tagRegex.exec(script)) !== null) {
-    const tagStart = match.index;
-    const tagEnd = tagStart + match[0].length;
-    const condition = match[1];
-
-    const prevChar = tagStart > 0 ? script[tagStart - 1] : " ";
-    const isAtBoundary = !/[a-zA-Z]/.test(prevChar);
-
-    if (isAtBoundary) {
-      result += script.slice(lastIndex, tagEnd);
-    } else {
-      let wordStart = tagStart;
-      while (wordStart > lastIndex && script[wordStart - 1] !== " " && script[wordStart - 1] !== "\n") wordStart--;
-
-      if (wordStart < lastIndex) {
-        result += script.slice(lastIndex, tagEnd);
-      } else {
-        const prefixLen = tagStart - wordStart;
-        const prefix = script.slice(wordStart, tagStart);
-
-        if (prefixLen < 4) {
-          // Short prefix (e.g. "B", "I", "A", "Tr") — tag split a word, reconstruct it
-          let trailEnd = tagEnd;
-          if (trailEnd < script.length && script[trailEnd] === " ") trailEnd++;
-          while (trailEnd < script.length && /[a-zA-Z]/.test(script[trailEnd])) trailEnd++;
-          const suffix = script.slice(trailEnd > tagEnd && script[tagEnd] === " " ? tagEnd + 1 : tagEnd, trailEnd);
-
-          result += script.slice(lastIndex, wordStart);
-          result += `[${condition}] `;
-          result += prefix + suffix;
-          lastIndex = trailEnd;
-          continue;
-        } else {
-          // Long prefix — tag is between two words, just move it to boundary
-          result += script.slice(lastIndex, wordStart);
-          result += `[${condition}] `;
-          result += script.slice(wordStart, tagStart);
-        }
-      }
-    }
-
-    lastIndex = tagEnd;
-  }
-
-  result += script.slice(lastIndex);
-  return result;
-}
-    }
-
-    lastIndex = tagEnd;
-  }
-
-  result += script.slice(lastIndex);
-  return result;
-}
 
 export async function POST(req: NextRequest) {
   try {
@@ -93,7 +33,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { script: rawScript, speakerAudio, ...overrides } = parsed.data;
+    const { segments: rawSegments, speakerAudio, ...overrides } = parsed.data;
 
     try {
       getVoxCPM2SpaceId();
@@ -104,21 +44,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Fix mid-word tag positions before parsing
-    const script = fixTagPositions(rawScript);
-    console.log("[voxcpm2-route] Fixed script:", script.slice(0, 120));
-
-    const segments = parseScript(script);
-    if (segments.length === 0) {
-      return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
-    }
-
     // Build per-segment data with emotion-mapped control instructions
-    const segmentData = segments
+    const segmentData = rawSegments
       .filter((s) => s.text.trim())
       .map((seg) => ({
-        text: applyModifiers(seg.text.trim(), seg.condition),
-        emotion: seg.condition,
+        text: applyModifiers(seg.text.trim(), seg.emotion),
+        emotion: seg.emotion,
       }))
       .filter((s) => s.text.trim());
 
@@ -126,7 +57,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
     }
 
-    console.log("[voxcpm2-route] Parsed segments:");
+    console.log("[voxcpm2-route] Segments:");
     segmentData.forEach((s, i) => {
       console.log(`  ${i + 1}. text="${s.text.slice(0, 60)}" emotion=${s.emotion}`);
     });
@@ -135,8 +66,6 @@ export async function POST(req: NextRequest) {
       segments: segmentData,
       referenceAudioBase64: speakerAudio ?? undefined,
       controlInstruction: overrides.controlInstruction,
-      usePromptText: overrides.usePromptText,
-      promptText: overrides.promptText,
       cfgValue: overrides.cfgValue,
       doNormalize: overrides.doNormalize,
       denoise: overrides.denoise,

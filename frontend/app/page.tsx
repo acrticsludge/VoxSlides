@@ -7,6 +7,7 @@ import { AudioPlayer } from "@/components/audio-player/AudioPlayer";
 import { addToHistory, loadHistory, HISTORY_KEY } from "@/lib/history";
 import { VoiceRecorder } from "@/components/voice-recorder/VoiceRecorder";
 import { logError, logApiError } from "@/lib/errors";
+import { parseScript, applyModifiers } from "@/lib/script-utils";
 import toast, { Toaster } from "react-hot-toast";
 
 function formatTimeAgo(timestamp: number) {
@@ -82,11 +83,21 @@ export default function Home() {
     setAudioUrl(null);
 
     try {
+      // Build segments directly from text + slots — bypass compiled script parsing
+      const rawSegments = parseScript(compiledScript);
+      const segments = rawSegments
+        .filter((s) => s.text.trim())
+        .map((s) => ({
+          text: applyModifiers(s.text.trim(), s.condition),
+          emotion: s.condition,
+        }))
+        .filter((s) => s.text.trim());
+
       const res = await fetch("/api/v1/tts/voxcpm2", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          script: compiledScript,
+          segments,
           speakerAudio: speakerAudio || undefined,
           controlInstruction: controlInstruction || undefined,
           cfgValue,
