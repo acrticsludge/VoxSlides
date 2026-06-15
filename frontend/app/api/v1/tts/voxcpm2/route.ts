@@ -18,43 +18,40 @@ const RequestSchema = z.object({
   denoise: z.boolean().optional(),
 });
 
-// Fix mid-word tag positions: move [tag] to the nearest word boundary before it
+// Fix tag positions: ensure every [tag] is at a word boundary (not mid-word)
 function fixTagPositions(script: string): string {
   const tagRegex = /\[([^\]]+)\]/g;
+  let result = "";
+  let lastIndex = 0;
   let match: RegExpExecArray | null;
-  const fixes: { start: number; end: number; condition: string; insertAt: number }[] = [];
 
   while ((match = tagRegex.exec(script)) !== null) {
     const tagStart = match.index;
     const tagEnd = tagStart + match[0].length;
     const condition = match[1];
 
-    // Only fix if tag is BETWEEN LETTERS (truly mid-word, not after punctuation)
     const prevChar = tagStart > 0 ? script[tagStart - 1] : " ";
-    const nextChar = tagEnd < script.length ? script[tagEnd] : " ";
-    const isPrevLetter = /[a-zA-Z]/.test(prevChar);
-    const isNextLetter = /[a-zA-Z]/.test(nextChar);
+    const isAtBoundary = !/[a-zA-Z]/.test(prevChar);
 
-    if (isPrevLetter && isNextLetter) {
-      // Find the nearest space before the tag
+    if (isAtBoundary) {
+      result += script.slice(lastIndex, tagEnd);
+    } else {
       let wordStart = tagStart;
-      while (wordStart > 0 && script[wordStart - 1] !== " " && script[wordStart - 1] !== "\n") wordStart--;
-
-      fixes.push({ start: tagStart, end: tagEnd, condition, insertAt: wordStart });
+      while (wordStart > lastIndex && script[wordStart - 1] !== " " && script[wordStart - 1] !== "\n") wordStart--;
+      // If wordStart couldn't reach before lastIndex, tag is effectively at boundary
+      if (wordStart < lastIndex) {
+        result += script.slice(lastIndex, tagEnd);
+      } else {
+        result += script.slice(lastIndex, wordStart);
+        result += `[${condition}] `;
+        result += script.slice(wordStart, tagStart);
+      }
     }
+
+    lastIndex = tagEnd;
   }
 
-  // Apply fixes in reverse order so positions stay valid
-  let result = script;
-  for (let i = fixes.length - 1; i >= 0; i--) {
-    const f = fixes[i];
-    const tag = `[${f.condition}] `;
-    // Remove the tag from its current position
-    const withoutTag = result.slice(0, f.start) + result.slice(f.end);
-    // Insert the tag at the word boundary
-    result = withoutTag.slice(0, f.insertAt) + tag + withoutTag.slice(f.insertAt);
-  }
-
+  result += script.slice(lastIndex);
   return result;
 }
 
