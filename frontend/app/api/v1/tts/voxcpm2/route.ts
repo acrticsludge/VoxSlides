@@ -38,14 +38,40 @@ function fixTagPositions(script: string): string {
     } else {
       let wordStart = tagStart;
       while (wordStart > lastIndex && script[wordStart - 1] !== " " && script[wordStart - 1] !== "\n") wordStart--;
-      // If wordStart couldn't reach before lastIndex, tag is effectively at boundary
+
       if (wordStart < lastIndex) {
         result += script.slice(lastIndex, tagEnd);
       } else {
-        result += script.slice(lastIndex, wordStart);
-        result += `[${condition}] `;
-        result += script.slice(wordStart, tagStart);
+        const prefixLen = tagStart - wordStart;
+        const prefix = script.slice(wordStart, tagStart);
+
+        if (prefixLen < 4) {
+          // Short prefix (e.g. "B", "I", "A", "Tr") — tag split a word, reconstruct it
+          let trailEnd = tagEnd;
+          if (trailEnd < script.length && script[trailEnd] === " ") trailEnd++;
+          while (trailEnd < script.length && /[a-zA-Z]/.test(script[trailEnd])) trailEnd++;
+          const suffix = script.slice(trailEnd > tagEnd && script[tagEnd] === " " ? tagEnd + 1 : tagEnd, trailEnd);
+
+          result += script.slice(lastIndex, wordStart);
+          result += `[${condition}] `;
+          result += prefix + suffix;
+          lastIndex = trailEnd;
+          continue;
+        } else {
+          // Long prefix — tag is between two words, just move it to boundary
+          result += script.slice(lastIndex, wordStart);
+          result += `[${condition}] `;
+          result += script.slice(wordStart, tagStart);
+        }
       }
+    }
+
+    lastIndex = tagEnd;
+  }
+
+  result += script.slice(lastIndex);
+  return result;
+}
     }
 
     lastIndex = tagEnd;
