@@ -29,7 +29,7 @@ export const VOXCPM2_DEFAULTS = {
   denoise: false,
 };
 
-// ── Emotion → natural control instruction (short, direct — model expects voice descriptors) ──
+// ── Emotion → control instruction (short voice descriptors matching demo format) ──
 
 const EMOTION_INSTRUCTIONS: Record<string, string> = {
   excited:
@@ -63,10 +63,7 @@ function getControlInstruction(
   fallback: string
 ): string {
   if (!emotion) return fallback;
-  const mapped = EMOTION_INSTRUCTIONS[emotion];
-  if (mapped) return mapped;
-  // Custom emotion: use it as-is
-  return emotion;
+  return EMOTION_INSTRUCTIONS[emotion] ?? emotion;
 }
 
 // ── Text chunking ──
@@ -249,6 +246,102 @@ async function downloadAudio(
   throw new Error("Cannot read audio output");
 }
 
+// ── Raw Gradio streaming call (positional array, proven to work) ──
+
+async function gradioCall(
+  client: Client,
+  endpoint: string,
+  data: unknown[]
+): Promise<unknown[]> {
+  const root = client.config?.root ?? "";
+  const apiPrefix = client.config?.api_prefix ?? "";
+  const callUrl = `${root}${apiPrefix}/call/${endpoint}`;
+
+  const submitRes = await fetch(callUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ data }),
+  });
+
+  if (!submitRes.ok) {
+    const errText = await submitRes.text().catch(() => "");
+    throw new Error(`Gradio submit failed (${submitRes.status}): ${errText}`);
+  }
+
+  const submitBody = await submitRes.json();
+  const eventId = submitBody.event_id as string | undefined;
+  if (!eventId) throw new Error("No event_id returned");
+
+  const resultRes = await fetch(`${callUrl}/${eventId}`);
+  if (!resultRes.ok) {
+    const errText = await resultRes.text().catch(() => "");
+    throw new Error(`Gradio result failed (${resultRes.status}): ${errText}`);
+  }
+
+  return collectSseResult(resultRes);
+}
+
+async function collectSseResult(response: Response): Promise<unknown[]> {
+  const text = await response.text();
+  const lines = text.split(/\r?\n/);
+
+  let currentEventType = "";
+  let currentDataLine = "";
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed;
+        if (parsed?.type === "complete" && parsed?.output?.data) {
+          return parsed.output.data;
+        }
+        if (parsed?.output?.data) return parsed.output.data;
+      } catch {
+        // Not JSON
+      }
+    }
+
+    if (trimmed.startsWith("event: ")) {
+      currentEventType = trimmed.slice(7).trim();
+    } else if (trimmed.startsWith("data: ")) {
+      currentDataLine = trimmed.slice(6);
+      if (currentEventType === "complete" && currentDataLine) {
+        try {
+          const parsed = JSON.parse(currentDataLine);
+          if (Array.isArray(parsed)) return parsed;
+          const output = parsed?.output;
+          if (output?.data) return output.data;
+        } catch {
+          // malformed
+        }
+      }
+    }
+  }
+
+  // Fallback
+  for (const line of lines) {
+    const trimmed2 = line.trim();
+    if (!trimmed2) continue;
+    try {
+      const parsed = JSON.parse(trimmed2);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed?.output?.data) return parsed.output.data;
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error(
+    `No complete result. Raw: ${text.slice(0, 500)}`
+  );
+}
+
+// ── Generate one segment via raw positional array ──
+
 async function generateOne(
   client: Client,
   text: string,
@@ -260,21 +353,20 @@ async function generateOne(
   doNormalize: boolean,
   denoise: boolean
 ): Promise<Buffer> {
-  const genResult = await client.predict("/generate", {
-    text_input: text,
-    control_instruction: controlInstruction,
-    reference_wav_path_input: audioRef,
-    use_prompt_text: useUltimate,
-    prompt_text_input: useUltimate ? finalPromptText : "",
-    cfg_value_input: cfgValue,
-    do_normalize: doNormalize,
-    denoise: denoise,
-  });
+  // Positional array matching Gradio API:
+  // [text_input, control_instruction, reference_wav_path_input, use_prompt_text, prompt_text_input, cfg_value_input, do_normalize, denoise]
+  const data = await gradioCall(client, "generate", [
+    text,
+    controlInstruction,
+    audioRef ?? null,
+    useUltimate,
+    useUltimate ? finalPromptText : "",
+    cfgValue,
+    doNormalize,
+    denoise,
+  ]);
 
-  const audioOutput = (genResult.data as unknown[])?.[0] as Record<
-    string,
-    unknown
-  >;
+  const audioOutput = data?.[0] as Record<string, unknown> | undefined;
   if (!audioOutput) throw new Error("No audio returned from VoxCPM2");
 
   return downloadAudio(client, audioOutput);
@@ -305,11 +397,7 @@ export async function synthesizeSpeech(
   const client = await Client.connect(spaceId);
 
   try {
-    // Upload reference audio
-    let audioRef: {
-      path: string;
-      meta: { _type: string };
-    } | null = null;
+    let audioRef: { path: string; meta: { _type: string } } | null = null;
     let finalPromptText = promptText;
 
     if (referenceAudioBase64) {
@@ -337,13 +425,9 @@ export async function synthesizeSpeech(
       }
     }
 
-    // Check if any segment has an emotion tag
     const hasEmotions = segments.some((s) => s.emotion && s.emotion !== "");
-
-    // Ultimate Cloning disables control_instruction — only use when no emotions
     const useUltimate = !!audioRef && !!finalPromptText && !hasEmotions;
 
-    // Build work items: each segment → chunked text items with emotion
     const workItems: { text: string; controlInstruction: string }[] = [];
 
     for (const seg of segments) {
@@ -358,20 +442,17 @@ export async function synthesizeSpeech(
       }
     }
 
-    console.log(
-      `[voxcpm2] ${workItems.length} work items from ${segments.length} segment(s)`
-    );
-    console.log(
-      `[voxcpm2] Mode: ${useUltimate ? "Ultimate Cloning (no emotions)" : hasEmotions ? "Controllable Cloning (emotions active)" : "Voice Design (no reference audio)"}`
-    );
+    console.log(`[voxcpm2] ${workItems.length} work items from ${segments.length} segment(s)`);
+    console.log(`[voxcpm2] Mode: ${useUltimate ? "Ultimate Cloning (no emotions)" : hasEmotions ? "Controllable Cloning (emotions active)" : "Voice Design"}`);
+    workItems.forEach((item, i) => {
+      console.log(`[voxcpm2]   ${i + 1}. "${item.text.slice(0, 50)}" → control: "${item.controlInstruction}"`);
+    });
 
     const wavBuffers: Buffer[] = [];
 
     for (let i = 0; i < workItems.length; i++) {
       const item = workItems[i];
-      console.log(
-        `[voxcpm2] Generating ${i + 1}/${workItems.length} (${item.text.length} chars, emotion: "${item.controlInstruction.slice(0, 40)}...")`
-      );
+      console.log(`[voxcpm2] Generating ${i + 1}/${workItems.length}`);
 
       const buf = await generateOne(
         client,
@@ -388,9 +469,7 @@ export async function synthesizeSpeech(
     }
 
     const combined = concatWavBuffers(wavBuffers);
-    console.log(
-      `[voxcpm2] Combined ${wavBuffers.length} chunks → ${combined.length} bytes`
-    );
+    console.log(`[voxcpm2] Combined ${wavBuffers.length} chunks → ${combined.length} bytes`);
     return { audioBuffer: combined };
   } finally {
     client.close();

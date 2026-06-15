@@ -58,6 +58,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
     }
 
+    console.log("[voxcpm2-route] Parsed segments:");
+    segmentData.forEach((s, i) => {
+      console.log(`  ${i + 1}. text="${s.text.slice(0, 60)}" emotion=${s.emotion}`);
+    });
+
     const voxParams: VoxCPM2Params = {
       segments: segmentData,
       referenceAudioBase64: speakerAudio ?? undefined,
