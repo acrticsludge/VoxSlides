@@ -29,8 +29,6 @@ export const VOXCPM2_DEFAULTS = {
   denoise: false,
 };
 
-// ── Emotion → control instruction (short voice descriptors matching demo format) ──
-
 const EMOTION_INSTRUCTIONS: Record<string, string> = {
   excited:
     "Energetic, enthusiastic, fast-paced, high pitch variation, excited tone",
@@ -65,8 +63,6 @@ function getControlInstruction(
   if (!emotion) return fallback;
   return EMOTION_INSTRUCTIONS[emotion] ?? emotion;
 }
-
-// ── Text chunking ──
 
 const MAX_CHUNK_CHARS = 150;
 
@@ -190,188 +186,6 @@ function concatWavBuffers(wavBuffers: Buffer[]): Buffer {
   }
 }
 
-// ── Gradio helpers ──
-
-async function uploadAudio(
-  client: Client,
-  audioBase64: string
-): Promise<string> {
-  const root = client.config?.root ?? "";
-  const apiPrefix = client.config?.api_prefix ?? "";
-  const raw = audioBase64.includes(",")
-    ? audioBase64.split(",", 2)[1]
-    : audioBase64;
-  const audioBytes = Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
-
-  const formData = new FormData();
-  formData.append(
-    "files",
-    new Blob([audioBytes], { type: "audio/wav" }),
-    "reference.wav"
-  );
-
-  const res = await fetch(`${root}${apiPrefix}/upload`, {
-    method: "POST",
-    body: formData,
-  });
-  if (!res.ok) throw new Error(`Audio upload failed (${res.status})`);
-
-  const paths: string[] = await res.json();
-  if (!paths?.[0]) throw new Error("Audio upload returned empty file list");
-  return paths[0];
-}
-
-async function downloadAudio(
-  client: Client,
-  audioOutput: Record<string, unknown>
-): Promise<Buffer> {
-  const root = client.config?.root ?? "";
-
-  if (audioOutput.b64) {
-    return Buffer.from(audioOutput.b64 as string, "base64");
-  }
-
-  const audioUrl =
-    (audioOutput.url as string | undefined) ??
-    (audioOutput.path
-      ? `${root}/file=${(audioOutput.path as string).replace(/^\/?/, "")}`
-      : null);
-
-  if (audioUrl) {
-    const res = await fetch(audioUrl);
-    if (!res.ok) throw new Error(`Failed to download audio (${res.status})`);
-    return Buffer.from(await res.arrayBuffer());
-  }
-
-  throw new Error("Cannot read audio output");
-}
-
-// ── Raw Gradio streaming call (positional array, proven to work) ──
-
-async function gradioCall(
-  client: Client,
-  endpoint: string,
-  data: unknown[]
-): Promise<unknown[]> {
-  const root = client.config?.root ?? "";
-  const apiPrefix = client.config?.api_prefix ?? "";
-  const callUrl = `${root}${apiPrefix}/call/${endpoint}`;
-
-  const submitRes = await fetch(callUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ data }),
-  });
-
-  if (!submitRes.ok) {
-    const errText = await submitRes.text().catch(() => "");
-    throw new Error(`Gradio submit failed (${submitRes.status}): ${errText}`);
-  }
-
-  const submitBody = await submitRes.json();
-  const eventId = submitBody.event_id as string | undefined;
-  if (!eventId) throw new Error("No event_id returned");
-
-  const resultRes = await fetch(`${callUrl}/${eventId}`);
-  if (!resultRes.ok) {
-    const errText = await resultRes.text().catch(() => "");
-    throw new Error(`Gradio result failed (${resultRes.status}): ${errText}`);
-  }
-
-  return collectSseResult(resultRes);
-}
-
-async function collectSseResult(response: Response): Promise<unknown[]> {
-  const text = await response.text();
-  const lines = text.split(/\r?\n/);
-
-  let currentEventType = "";
-  let currentDataLine = "";
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-
-    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (Array.isArray(parsed)) return parsed;
-        if (parsed?.type === "complete" && parsed?.output?.data) {
-          return parsed.output.data;
-        }
-        if (parsed?.output?.data) return parsed.output.data;
-      } catch {
-        // Not JSON
-      }
-    }
-
-    if (trimmed.startsWith("event: ")) {
-      currentEventType = trimmed.slice(7).trim();
-    } else if (trimmed.startsWith("data: ")) {
-      currentDataLine = trimmed.slice(6);
-      if (currentEventType === "complete" && currentDataLine) {
-        try {
-          const parsed = JSON.parse(currentDataLine);
-          if (Array.isArray(parsed)) return parsed;
-          const output = parsed?.output;
-          if (output?.data) return output.data;
-        } catch {
-          // malformed
-        }
-      }
-    }
-  }
-
-  // Fallback
-  for (const line of lines) {
-    const trimmed2 = line.trim();
-    if (!trimmed2) continue;
-    try {
-      const parsed = JSON.parse(trimmed2);
-      if (Array.isArray(parsed)) return parsed;
-      if (parsed?.output?.data) return parsed.output.data;
-    } catch {
-      continue;
-    }
-  }
-
-  throw new Error(
-    `No complete result. Raw: ${text.slice(0, 500)}`
-  );
-}
-
-// ── Generate one segment via raw positional array ──
-
-async function generateOne(
-  client: Client,
-  text: string,
-  controlInstruction: string,
-  audioRef: { path: string; meta: { _type: string } } | null,
-  useUltimate: boolean,
-  finalPromptText: string,
-  cfgValue: number,
-  doNormalize: boolean,
-  denoise: boolean
-): Promise<Buffer> {
-  // Positional array matching Gradio API:
-  // [text_input, control_instruction, reference_wav_path_input, use_prompt_text, prompt_text_input, cfg_value_input, do_normalize, denoise]
-  const data = await gradioCall(client, "generate", [
-    text,
-    controlInstruction,
-    audioRef ?? null,
-    useUltimate,
-    useUltimate ? finalPromptText : "",
-    cfgValue,
-    doNormalize,
-    denoise,
-  ]);
-
-  const audioOutput = data?.[0] as Record<string, unknown> | undefined;
-  if (!audioOutput) throw new Error("No audio returned from VoxCPM2");
-
-  return downloadAudio(client, audioOutput);
-}
-
 // ── Main ──
 
 export function getVoxCPM2SpaceId(): string {
@@ -397,18 +211,23 @@ export async function synthesizeSpeech(
   const client = await Client.connect(spaceId);
 
   try {
-    let audioRef: { path: string; meta: { _type: string } } | null = null;
+    // Build audio blob from base64 for client.predict (matches official API example)
+    let audioBlob: Blob | null = null;
     let finalPromptText = promptText;
 
     if (referenceAudioBase64) {
-      const serverPath = await uploadAudio(client, referenceAudioBase64);
-      audioRef = { path: serverPath, meta: { _type: "gradio.FileData" } };
+      const raw = referenceAudioBase64.includes(",")
+        ? referenceAudioBase64.split(",", 2)[1]
+        : referenceAudioBase64;
+      const audioBytes = Uint8Array.from(atob(raw), (c) => c.charCodeAt(0));
+      audioBlob = new Blob([audioBytes], { type: "audio/wav" });
 
+      // Auto-transcribe
       if (!finalPromptText) {
         try {
           const asrResult = await client.predict("/_run_asr_if_needed", {
             checked: true,
-            audio_path: audioRef,
+            audio_path: audioBlob,
           });
           const asrData = (asrResult.data as unknown[])?.[0] as
             | Record<string, unknown>
@@ -426,7 +245,7 @@ export async function synthesizeSpeech(
     }
 
     const hasEmotions = segments.some((s) => s.emotion && s.emotion !== "");
-    const useUltimate = !!audioRef && !!finalPromptText && !hasEmotions;
+    const useUltimate = !!audioBlob && !!finalPromptText && !hasEmotions;
 
     const workItems: { text: string; controlInstruction: string }[] = [];
 
@@ -443,9 +262,9 @@ export async function synthesizeSpeech(
     }
 
     console.log(`[voxcpm2] ${workItems.length} work items from ${segments.length} segment(s)`);
-    console.log(`[voxcpm2] Mode: ${useUltimate ? "Ultimate Cloning (no emotions)" : hasEmotions ? "Controllable Cloning (emotions active)" : "Voice Design"}`);
+    console.log(`[voxcpm2] Mode: ${useUltimate ? "Ultimate Cloning" : hasEmotions ? "Controllable Cloning (emotions)" : "Voice Design"}`);
     workItems.forEach((item, i) => {
-      console.log(`[voxcpm2]   ${i + 1}. "${item.text.slice(0, 50)}" → control: "${item.controlInstruction}"`);
+      console.log(`  ${i + 1}. "${item.text.slice(0, 50)}" → ${item.controlInstruction}`);
     });
 
     const wavBuffers: Buffer[] = [];
@@ -454,17 +273,39 @@ export async function synthesizeSpeech(
       const item = workItems[i];
       console.log(`[voxcpm2] Generating ${i + 1}/${workItems.length}`);
 
-      const buf = await generateOne(
-        client,
-        item.text,
-        item.controlInstruction,
-        audioRef,
-        useUltimate,
-        finalPromptText,
-        cfgValue,
-        doNormalize,
-        denoise
-      );
+      // Use client.predict with named params + Blob (matches official demo API example)
+      const genResult = await client.predict("/generate", {
+        text_input: item.text,
+        control_instruction: item.controlInstruction,
+        reference_wav_path_input: audioBlob,
+        use_prompt_text: useUltimate,
+        prompt_text_input: useUltimate ? finalPromptText : "",
+        cfg_value_input: cfgValue,
+        do_normalize: doNormalize,
+        denoise: denoise,
+      });
+
+      const audioOutput = (genResult.data as unknown[])?.[0] as Record<string, unknown>;
+      if (!audioOutput) throw new Error("No audio returned from VoxCPM2");
+
+      // Download the audio
+      const root = client.config?.root ?? "";
+      let buf: Buffer;
+
+      if (audioOutput.b64) {
+        buf = Buffer.from(audioOutput.b64 as string, "base64");
+      } else {
+        const audioUrl =
+          (audioOutput.url as string | undefined) ??
+          (audioOutput.path
+            ? `${root}/file=${(audioOutput.path as string).replace(/^\/?/, "")}`
+            : null);
+        if (!audioUrl) throw new Error("Cannot read audio output");
+        const res = await fetch(audioUrl);
+        if (!res.ok) throw new Error(`Failed to download audio (${res.status})`);
+        buf = Buffer.from(await res.arrayBuffer());
+      }
+
       wavBuffers.push(buf);
     }
 
