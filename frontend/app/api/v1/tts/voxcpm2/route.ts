@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { parseScript, applyModifiers } from "@/lib/script-utils";
+import { parseScript, applyModifiers, Segment } from "@/lib/script-utils";
 import {
   synthesizeSpeech,
   getVoxCPM2SpaceId,
@@ -17,6 +17,14 @@ const RequestSchema = z.object({
   doNormalize: z.boolean().optional(),
   denoise: z.boolean().optional(),
 });
+
+// Snap segment text to start/end at word boundaries
+function cleanSegmentText(text: string): string {
+  let t = text.trim();
+  // Trim leading partial words (starts with lowercase after a split)
+  t = t.replace(/^[a-z]{1,3}\s+/, "");
+  return t;
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -50,9 +58,10 @@ export async function POST(req: NextRequest) {
     const segmentData = segments
       .filter((s) => s.text.trim())
       .map((seg) => ({
-        text: applyModifiers(seg.text, seg.condition),
+        text: applyModifiers(cleanSegmentText(seg.text), seg.condition),
         emotion: seg.condition,
-      }));
+      }))
+      .filter((s) => s.text.trim());
 
     if (segmentData.length === 0) {
       return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });

@@ -312,46 +312,61 @@ export async function synthesizeSpeech(
 
     for (let i = 0; i < workItems.length; i++) {
       const item = workItems[i];
-      console.log(`[voxcpm2] Generating ${i + 1}/${workItems.length}`);
+      console.log(`[voxcpm2] Generating ${i + 1}/${workItems.length} control="${item.controlInstruction.slice(0, 30)}"`);
 
-      // Use client.predict with named params + Blob (matches official demo API example)
-      const genResult = await client.predict("/generate", {
-        text_input: item.text,
-        control_instruction: item.controlInstruction,
-        reference_wav_path_input: audioBlob,
-        use_prompt_text: useUltimate,
-        prompt_text_input: useUltimate ? finalPromptText : "",
-        cfg_value_input: cfgValue,
-        do_normalize: doNormalize,
-        denoise: denoise,
-      });
+      try {
+        const genResult = await client.predict("/generate", {
+          text_input: item.text,
+          control_instruction: item.controlInstruction,
+          reference_wav_path_input: audioBlob,
+          use_prompt_text: useUltimate,
+          prompt_text_input: useUltimate ? finalPromptText : "",
+          cfg_value_input: cfgValue,
+          do_normalize: doNormalize,
+          denoise: denoise,
+        });
 
-      const audioOutput = (genResult.data as unknown[])?.[0] as Record<string, unknown>;
-      if (!audioOutput) throw new Error("No audio returned from VoxCPM2");
+        const audioOutput = (genResult.data as unknown[])?.[0] as Record<string, unknown>;
+        if (!audioOutput) {
+          console.error(`[voxcpm2] No audio returned for chunk ${i + 1}, skipping`);
+          continue;
+        }
 
-      // Download the audio
-      const root = client.config?.root ?? "";
-      let buf: Buffer;
+        const root = client.config?.root ?? "";
+        let buf: Buffer;
 
-      if (audioOutput.b64) {
-        buf = Buffer.from(audioOutput.b64 as string, "base64");
-      } else {
-        const audioUrl =
-          (audioOutput.url as string | undefined) ??
-          (audioOutput.path
-            ? `${root}/file=${(audioOutput.path as string).replace(/^\/?/, "")}`
-            : null);
-        if (!audioUrl) throw new Error("Cannot read audio output");
-        const res = await fetch(audioUrl);
-        if (!res.ok) throw new Error(`Failed to download audio (${res.status})`);
-        buf = Buffer.from(await res.arrayBuffer());
+        if (audioOutput.b64) {
+          buf = Buffer.from(audioOutput.b64 as string, "base64");
+        } else {
+          const audioUrl =
+            (audioOutput.url as string | undefined) ??
+            (audioOutput.path
+              ? `${root}/file=${(audioOutput.path as string).replace(/^\/?/, "")}`
+              : null);
+          if (!audioUrl) {
+            console.error(`[voxcpm2] Cannot read audio for chunk ${i + 1}, skipping`);
+            continue;
+          }
+          const res = await fetch(audioUrl);
+          if (!res.ok) {
+            console.error(`[voxcpm2] Failed to download chunk ${i + 1} (${res.status}), skipping`);
+            continue;
+          }
+          buf = Buffer.from(await res.arrayBuffer());
+        }
+
+        wavBuffers.push(buf);
+      } catch (err) {
+        console.error(`[voxcpm2] Chunk ${i + 1} failed, skipping:`, err instanceof Error ? err.message : err);
       }
+    }
 
-      wavBuffers.push(buf);
+    if (wavBuffers.length === 0) {
+      throw new Error("All chunks failed to generate");
     }
 
     const combined = concatWavBuffers(wavBuffers);
-    console.log(`[voxcpm2] Combined ${wavBuffers.length} chunks → ${combined.length} bytes`);
+    console.log(`[voxcpm2] Combined ${wavBuffers.length}/${workItems.length} chunks → ${combined.length} bytes`);
     return { audioBuffer: combined };
   } finally {
     client.close();
