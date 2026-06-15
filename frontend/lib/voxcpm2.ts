@@ -64,6 +64,42 @@ function getControlInstruction(
   return EMOTION_INSTRUCTIONS[emotion] ?? emotion;
 }
 
+// ── Emotion markers embedded in text (stronger signal alongside control_instruction) ──
+
+const EMOTION_MARKERS: Record<string, string> = {
+  excited: "(excitedly) ",
+  whisper: "(whispering) ",
+  "slow and dramatic": "(slowly, dramatically) ",
+  fast: "(quickly) ",
+  nervous: "(nervously) ",
+  crying: "(crying) ",
+  angry: "(angrily) ",
+  calm: "(calmly) ",
+  laughing: "(laughing) ",
+  sarcastic: "(sarcastically) ",
+  storytelling: "(storytelling) ",
+  breathless: "(out of breath) ",
+};
+
+// ── Build text with emotion marker + control instruction ──
+
+function buildEmotionText(text: string, emotion: string | null): {
+  text: string;
+  controlInstruction: string;
+} {
+  if (!emotion) {
+    return { text, controlInstruction: getControlInstruction(null, "") };
+  }
+
+  const marker = EMOTION_MARKERS[emotion] ?? `(${emotion}) `;
+  const controlInstruction = getControlInstruction(emotion, "");
+
+  return {
+    text: marker + text,
+    controlInstruction,
+  };
+}
+
 const MAX_CHUNK_CHARS = 150;
 
 function splitIntoChunks(text: string): string[] {
@@ -251,20 +287,23 @@ export async function synthesizeSpeech(
 
     for (const seg of segments) {
       if (!seg.text.trim()) continue;
-      const emotionInstruction = getControlInstruction(
-        seg.emotion,
-        controlInstruction
+      // Dual signal: emotion marker embedded in text + control_instruction param
+      const { text: emotionText, controlInstruction: ci } = buildEmotionText(
+        seg.text,
+        seg.emotion
       );
-      const textChunks = splitIntoChunks(seg.text);
+      // Use the user's fallback control instruction if no emotion
+      const finalCI = seg.emotion ? ci : controlInstruction;
+      const textChunks = splitIntoChunks(emotionText);
       for (const chunk of textChunks) {
-        workItems.push({ text: chunk, controlInstruction: emotionInstruction });
+        workItems.push({ text: chunk, controlInstruction: finalCI });
       }
     }
 
     console.log(`[voxcpm2] ${workItems.length} work items from ${segments.length} segment(s)`);
     console.log(`[voxcpm2] Mode: ${useUltimate ? "Ultimate Cloning" : hasEmotions ? "Controllable Cloning (emotions)" : "Voice Design"}`);
     workItems.forEach((item, i) => {
-      console.log(`  ${i + 1}. "${item.text.slice(0, 50)}" → ${item.controlInstruction}`);
+      console.log(`  ${i + 1}. text="${item.text.slice(0, 60)}" control="${item.controlInstruction}"`);
     });
 
     const wavBuffers: Buffer[] = [];
