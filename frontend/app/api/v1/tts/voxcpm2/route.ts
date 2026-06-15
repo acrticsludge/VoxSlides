@@ -20,10 +20,7 @@ const RequestSchema = z.object({
 
 // Snap segment text to start/end at word boundaries
 function cleanSegmentText(text: string): string {
-  let t = text.trim();
-  // Trim leading partial words (starts with lowercase after a split)
-  t = t.replace(/^[a-z]{1,3}\s+/, "");
-  return t;
+  return text.trim();
 }
 
 export async function POST(req: NextRequest) {

@@ -82,25 +82,26 @@ export function SlotEditor({
 
   const addSlot = useCallback(
     (condition: string, isCustom: boolean) => {
-      const newText = text.slice(0, cursorPos) + " " + text.slice(cursorPos);
-      onTextChange(newText);
+      // Snap backward to nearest space (start of current word)
+      let snapPos = cursorPos;
+      while (snapPos > 0 && text[snapPos - 1] !== " " && text[snapPos - 1] !== "\n") snapPos--;
 
       const newSlot: Slot = {
         id: crypto.randomUUID(),
-        position: cursorPos,
+        position: snapPos,
         condition,
         isCustom,
       };
       const newSlots = [...slots, newSlot];
       onSlotsChange(newSlots);
-      const compiled = compileScript(newText, newSlots);
+      const compiled = compileScript(text, newSlots);
       onCompiledChange(compiled);
       setPickerOpen(false);
 
       requestAnimationFrame(() => {
         if (textareaRef.current) {
           textareaRef.current.focus();
-          textareaRef.current.setSelectionRange(cursorPos + 1, cursorPos + 1);
+          textareaRef.current.setSelectionRange(snapPos, snapPos);
         }
       });
     },
