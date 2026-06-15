@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { parseScript, applyModifiers, Segment } from "@/lib/script-utils";
+import { parseScript, applyModifiers } from "@/lib/script-utils";
 import {
   synthesizeSpeech,
   getVoxCPM2SpaceId,
