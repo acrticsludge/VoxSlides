@@ -32,7 +32,7 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [controlInstruction, setControlInstruction] = useState("");
-  const [cfgValue, setCfgValue] = useState(2);
+  const [cfgValue, setCfgValue] = useState(3);
   const [doNormalize, setDoNormalize] = useState(false);
   const [denoise, setDenoise] = useState(false);
 

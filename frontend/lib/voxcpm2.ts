@@ -24,38 +24,38 @@ export const VOXCPM2_DEFAULTS = {
   controlInstruction: "",
   usePromptText: false,
   promptText: "",
-  cfgValue: 2,
+  cfgValue: 3,
   doNormalize: false,
   denoise: false,
 };
 
-// ── Emotion → natural control instruction ──
+// ── Emotion → natural control instruction (short, direct — model expects voice descriptors) ──
 
 const EMOTION_INSTRUCTIONS: Record<string, string> = {
   excited:
-    "Speak with high energy and enthusiasm, slightly faster pace, higher pitch variation, like sharing exciting news",
+    "Energetic, enthusiastic, fast-paced, high pitch variation, excited tone",
   whisper:
-    "Speak in a soft whisper, very quiet and breathy, intimate and secretive tone, close to the microphone",
+    "Soft whisper, breathy, quiet, intimate, close-mic, secretive tone",
   "slow and dramatic":
-    "Speak very slowly with dramatic pauses, deep serious tone, each word weighted with significance, like narrating a pivotal moment",
+    "Very slow, dramatic pauses, deep serious tone, heavy emphasis on each word",
   fast:
-    "Speak quickly and urgently, rapid-fire delivery, words flowing one into the next without pause",
+    "Rapid, urgent, fast-paced delivery, words flowing quickly without pause",
   nervous:
-    "Speak with a slight tremor in the voice, hesitant and uncertain, occasional stumbles, like speaking under pressure",
+    "Nervous, hesitant, slight tremor, uncertain tone, small voice, anxious",
   crying:
-    "Speak with a trembling, tearful voice, voice breaking with emotion, sniffles between phrases, deeply sad",
+    "Tearful, trembling voice, breaking with emotion, sad, sniffles, choked up",
   angry:
-    "Speak with controlled fury, sharp and forceful delivery, each word bitten off, jaw tight, rising intensity",
+    "Angry, sharp, forceful, biting each word, rising intensity, frustrated",
   calm:
-    "Speak in a relaxed, soothing tone, gentle and unhurried, like talking to a friend on a quiet evening",
+    "Relaxed, calm, soothing, gentle, unhurried, peaceful tone",
   laughing:
-    "Speak with laughter woven into the words, voice bright and amused, chuckling between phrases, infectious joy",
+    "Laughing, amused, bright voice, chuckling, joyful, smiling tone",
   sarcastic:
-    "Speak with a dry, knowing tone, drawl on key words, subtle eye-roll in the voice, thinly veiled mockery",
+    "Dry, sarcastic, knowing tone, drawn-out words, mocking, sardonic",
   storytelling:
-    "Speak as a captivating storyteller, varied pace and tone, building suspense, painting vivid scenes with your voice",
+    "Narrator voice, varied pace, building suspense, dramatic, engaging storyteller",
   breathless:
-    "Speak as if out of breath, panting slightly between words, urgent and winded, like you just ran up stairs",
+    "Out of breath, panting, winded, urgent, catching breath between words",
 };
 
 function getControlInstruction(
@@ -265,7 +265,7 @@ async function generateOne(
     control_instruction: controlInstruction,
     reference_wav_path_input: audioRef,
     use_prompt_text: useUltimate,
-    prompt_text_input: finalPromptText,
+    prompt_text_input: useUltimate ? finalPromptText : "",
     cfg_value_input: cfgValue,
     do_normalize: doNormalize,
     denoise: denoise,
