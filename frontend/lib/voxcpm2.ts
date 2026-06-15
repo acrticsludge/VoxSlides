@@ -281,7 +281,9 @@ export async function synthesizeSpeech(
     }
 
     const hasEmotions = segments.some((s) => s.emotion && s.emotion !== "");
-    const useUltimate = !!audioBlob && !!finalPromptText && !hasEmotions;
+    const hasControlInstruction = !!(controlInstruction || hasEmotions);
+    // Ultimate Cloning disables control_instruction — only use when no emotions AND no sidebar instruction
+    const useUltimate = !!audioBlob && !!finalPromptText && !hasControlInstruction;
 
     const workItems: { text: string; controlInstruction: string }[] = [];
 
@@ -301,7 +303,7 @@ export async function synthesizeSpeech(
     }
 
     console.log(`[voxcpm2] ${workItems.length} work items from ${segments.length} segment(s)`);
-    console.log(`[voxcpm2] Mode: ${useUltimate ? "Ultimate Cloning" : hasEmotions ? "Controllable Cloning (emotions)" : "Voice Design"}`);
+    console.log(`[voxcpm2] Mode: ${useUltimate ? "Ultimate Cloning" : hasEmotions ? "Controllable Cloning (emotion tags)" : hasControlInstruction ? "Controllable Cloning (sidebar instruction)" : "Controllable Cloning (no instruction)"}`);
     workItems.forEach((item, i) => {
       console.log(`  ${i + 1}. text="${item.text.slice(0, 60)}" control="${item.controlInstruction}"`);
     });
