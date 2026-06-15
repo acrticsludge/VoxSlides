@@ -18,6 +18,46 @@ const RequestSchema = z.object({
   denoise: z.boolean().optional(),
 });
 
+// Fix mid-word tag positions: move [tag] to the nearest word boundary before it
+function fixTagPositions(script: string): string {
+  const tagRegex = /\[([^\]]+)\]/g;
+  let match: RegExpExecArray | null;
+  const fixes: { start: number; end: number; condition: string; insertAt: number }[] = [];
+
+  while ((match = tagRegex.exec(script)) !== null) {
+    const tagStart = match.index;
+    const tagEnd = tagStart + match[0].length;
+    const condition = match[1];
+
+    // Only fix if tag is BETWEEN LETTERS (truly mid-word, not after punctuation)
+    const prevChar = tagStart > 0 ? script[tagStart - 1] : " ";
+    const nextChar = tagEnd < script.length ? script[tagEnd] : " ";
+    const isPrevLetter = /[a-zA-Z]/.test(prevChar);
+    const isNextLetter = /[a-zA-Z]/.test(nextChar);
+
+    if (isPrevLetter && isNextLetter) {
+      // Find the nearest space before the tag
+      let wordStart = tagStart;
+      while (wordStart > 0 && script[wordStart - 1] !== " " && script[wordStart - 1] !== "\n") wordStart--;
+
+      fixes.push({ start: tagStart, end: tagEnd, condition, insertAt: wordStart });
+    }
+  }
+
+  // Apply fixes in reverse order so positions stay valid
+  let result = script;
+  for (let i = fixes.length - 1; i >= 0; i--) {
+    const f = fixes[i];
+    const tag = `[${f.condition}] `;
+    // Remove the tag from its current position
+    const withoutTag = result.slice(0, f.start) + result.slice(f.end);
+    // Insert the tag at the word boundary
+    result = withoutTag.slice(0, f.insertAt) + tag + withoutTag.slice(f.insertAt);
+  }
+
+  return result;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -30,7 +70,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { script, speakerAudio, ...overrides } = parsed.data;
+    const { script: rawScript, speakerAudio, ...overrides } = parsed.data;
 
     try {
       getVoxCPM2SpaceId();
@@ -41,30 +81,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Fix mid-word tag positions before parsing
+    const script = fixTagPositions(rawScript);
+
     const segments = parseScript(script);
     if (segments.length === 0) {
       return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
     }
 
     // Build per-segment data with emotion-mapped control instructions
-    let segmentData = segments
+    const segmentData = segments
       .filter((s) => s.text.trim())
       .map((seg) => ({
         text: applyModifiers(seg.text.trim(), seg.condition),
         emotion: seg.condition,
       }))
       .filter((s) => s.text.trim());
-
-    // Fix mid-word splits: if segment starts with lowercase (e.g. "ut this"),
-    // the previous segment ended mid-word — move the fragment back
-    for (let i = segmentData.length - 1; i > 0; i--) {
-      const firstChar = segmentData[i].text[0];
-      if (firstChar && firstChar === firstChar.toLowerCase() && firstChar !== firstChar.toUpperCase()) {
-        // Starts with lowercase → mid-word split, prepend to previous segment
-        segmentData[i - 1].text += segmentData[i].text;
-        segmentData.splice(i, 1);
-      }
-    }
 
     if (segmentData.length === 0) {
       return NextResponse.json({ error: "No text to synthesize" }, { status: 422 });
