@@ -337,7 +337,11 @@ export async function synthesizeSpeech(
       }
     }
 
-    const useUltimate = !!audioRef && !!finalPromptText;
+    // Check if any segment has an emotion tag
+    const hasEmotions = segments.some((s) => s.emotion && s.emotion !== "");
+
+    // Ultimate Cloning disables control_instruction — only use when no emotions
+    const useUltimate = !!audioRef && !!finalPromptText && !hasEmotions;
 
     // Build work items: each segment → chunked text items with emotion
     const workItems: { text: string; controlInstruction: string }[] = [];
@@ -357,7 +361,9 @@ export async function synthesizeSpeech(
     console.log(
       `[voxcpm2] ${workItems.length} work items from ${segments.length} segment(s)`
     );
-    console.log(`[voxcpm2] Ultimate Cloning: ${useUltimate}`);
+    console.log(
+      `[voxcpm2] Mode: ${useUltimate ? "Ultimate Cloning (no emotions)" : hasEmotions ? "Controllable Cloning (emotions active)" : "Voice Design (no reference audio)"}`
+    );
 
     const wavBuffers: Buffer[] = [];
 
