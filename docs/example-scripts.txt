@@ -1,0 +1,54 @@
+ VoxSlides — Example Scripts
+==============================
+
+Paste any of these into the editor to test emotion-driven TTS.
+
+
+--- SCRIPT 1: Tech Product Launch ---
+
+[excited] Welcome everyone, today we're unveiling something we've been building for months. [calm] Now I know what you're thinking — another product launch, another set of promises. [storytelling] But this one is different. Let me take you back to where it all started. [whisper] It was late one night, and we stumbled onto an idea that changed everything. [excited] And now, here it is — in your hands. [sarcastic] Try not to break it on day one.
+
+
+--- SCRIPT 2: Motivational Talk ---
+
+[calm] Let me ask you something. When was the last time you truly failed at something? [nervous] Not the kind of failure where you play it safe and just miss the mark. I mean the kind where you went all in and it just didn't work. [storytelling] There's a story about a scientist who failed ten thousand times before getting it right. [excited] Ten thousand! Can you imagine the persistence that takes? [calm] Here's the thing — every single one of those failures taught him something new. [whisper] And that's the secret nobody tells you. Failure isn't the opposite of success. It's the path to it.
+
+
+--- SCRIPT 3: Horror Story ---
+
+[calm] The old house at the end of Maple Street had been empty for years. [whisper] Nobody went there. Nobody talked about it. [slow and dramatic] But on quiet nights, if you stood very still, you could hear something. [nervous] A faint scratching, coming from inside the walls. [crying] The last person who investigated never came back the same. [whisper] They say on certain nights, you can still hear them whispering. [slow and dramatic] Calling out. Waiting.
+
+
+--- SCRIPT 4: News Broadcast ---
+
+[calm] Good evening. Tonight's top story: a breakthrough in renewable energy has been announced by researchers at MIT. [excited] The team has developed a solar cell that is forty percent more efficient than anything currently on the market. [calm] The implications are massive — this could reshape the entire energy sector within the next decade. [fast] Market analysts are already calling it the most significant development in clean energy since the invention of the modern solar panel. [calm] We'll have more details as the story develops.
+
+
+--- SCRIPT 5: Casual Conversation ---
+
+[laughing] Oh my god, you won't believe what happened to me today. [excited] So I'm standing in line at the coffee shop, right? [calm] And this guy in front of me orders the most ridiculous drink I've ever heard. [laughing] I'm talking like six shots, oat milk, three pumps of vanilla, extra foam, blended upside down — I don't even know what that means! [sarcastic] And the barista just stares at him like, dude, are you serious right now? [laughing] I nearly choked on my latte.
+
+
+--- SCRIPT 6: Sad Reflection ---
+
+[crying] I keep coming back to that last conversation we had. [whisper] The words I never got to say. [slow and dramatic] Time has this way of making everything feel both permanent and temporary at the same time. [calm] Some days it feels like yesterday. Other days, it feels like a lifetime ago. [whisper] I wonder if you ever think about it too. [crying] I wonder if you remember.
+
+
+--- SCRIPT 7: Sports Commentary ---
+
+[excited] AND HE'S OFF! Down the left wing, defenders closing in fast! [fast] He cuts inside — oh, beautiful footwork! [nervous] The keeper's coming out — this is it, this is the moment! [excited] GOOOAAAAL! What a finish! Absolute scenes in the stadium tonight! [laughing] That's the kind of goal you watch a hundred times and it still gives you chills!
+
+
+--- SCRIPT 8: Dramatic Monologue ---
+
+[calm] They told me I wasn't good enough. [sarcastic] Too quiet. Too different. [slow and dramatic] But somewhere between the silence and the noise, I found my voice. [whisper] Not the loudest one in the room. [storytelling] But the one that made people stop and listen. [calm] And when the moment came, when everything was on the line, [breathless] I didn't hesitate. [excited] I stepped up. And I never looked back.
+
+
+--- SCRIPT 9: Educational Explainer ---
+
+[calm] Let's talk about how your brain processes language. When you hear a word, your brain doesn't just hear sounds. [storytelling] It pulls from memory, context, emotion — everything you've ever experienced with that word. [excited] That's why the same sentence can make you laugh or cry depending on how it's said. [calm] Tone, pace, emphasis — they're not just extras. They're the message itself. [whisper] And that's exactly why expressive TTS matters.
+
+
+--- SCRIPT 10: Comedy Bit ---
+
+[nervous] So I tried to cook dinner last night. [sarcastic] And by "cook" I mean I opened the fridge and had a conversation with it. [laughing] The fridge said nothing back, which honestly was the most honest feedback I've gotten all week. [breathless] Then I burned the pasta. [excited] Not a little! I set off the smoke alarm, the neighbors called, the whole thing! [calm] I ordered pizza after that. [sarcastic] The delivery guy judged me. I could see it in his eyes.
