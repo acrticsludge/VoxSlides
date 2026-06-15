@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
 
     // Fix mid-word tag positions before parsing
     const script = fixTagPositions(rawScript);
+    console.log("[voxcpm2-route] Fixed script:", script.slice(0, 120));
 
     const segments = parseScript(script);
     if (segments.length === 0) {
